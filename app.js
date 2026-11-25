@@ -9937,6 +9937,19 @@
         || (p.barcode && normalizeAr(p.barcode).includes(n)))
       || null;
   }
+  /* 💊 بناء 16: مطابقة «كود/باركود بالحرف» فقط — بنستخدمها عشان نكتب اسم الصنف في
+     خانة الاسم بمجرد ما الكود يكتمل (قبل Enter)، من غير ما كود ناقص يخطف صنف غلط. */
+  function productByExactCode(q) {
+    const raw = String(q == null ? "" : q);
+    const n = normalizeAr(raw);
+    const s = normalizeAr(scanClean(raw));
+    if (!n && !s) return null;
+    return products.find((p) => {
+      const code = normalizeAr(p.code);
+      const bc = p.barcode ? normalizeAr(p.barcode) : "";
+      return code === n || code === s || (bc && (bc === n || bc === s));
+    }) || null;
+  }
 
   /* 🆕 مربع العميل/المورد = قائمة اختيار (بلا كتابة) — الأسماء مرتّبة أبجديًا (عربي متسامح)
      لتسهيل الاختيار. الحلّ للطرف بمطابقة عربية متسامحة (همزة/ألف/ياء/تاء مربوطة عبر normalizeAr). */
@@ -10281,12 +10294,20 @@
   }
 
   function posOnSearch() {
+    /* 💊 بناء 16: لو كُتب كود/باركود كامل في خانة الاسم، نبدّله فورًا باسم الصنف
+       (طلب المالك: «قبل ما أضغط Enter اسم الصنف يتكتب»). المطابقة حرفية عشان
+       كود ناقص ما يخطفش صنف غلط — البحث الجزئي لسه شغّال في findProductFlexible. */
+    const field = $("#txtPosSearch");
+    const exact = productByExactCode(field ? field.value : "");
+    if (exact && field && field.value.trim() !== (exact.nameAr || "")) {
+      field.value = exact.nameAr || "";
+    }
     // 🧾 بناء 211: لوحة الاقتراحات (أسماء فقط) مع كل حرف — وقائمة الأكثر مبيعًا لو الخانة فاضية
     productSuggestShow("sale");
     // مثل ديسك توب: بمجرد مطابقة المنتج يُملأ سعر البيع تلقائيًا من بياناته في المخزن
-    const q = $("#txtPosSearch").value.trim();
+    const q = field ? field.value.trim() : "";
     if (!q) return;
-    const p = findProductFlexible(q);
+    const p = exact || findProductFlexible(q);
     if (p) {
       posUpdateBadge(p);
       const input = $("#txtPosPrice");
@@ -10306,6 +10327,13 @@
       posUpdateBadge(p);
       const input = $("#txtPosPrice");
       if (input) input.value = moneyStr(p.salePrice);
+      /* 💊 بناء 16: اسم الصنف يتكتب في خانة الاسم فور اكتمال الكود/الباركود،
+         سواء كُتب بإيده أو اتختار من لوحة الأرقام — قبل ما المستخدم يضغط Enter. */
+      const exact = productByExactCode(q);
+      if (exact) {
+        const nameField = $("#txtPosSearch");
+        if (nameField && nameField.value !== (exact.nameAr || "")) nameField.value = exact.nameAr || "";
+      }
     } else {
       posUpdateBadge(null);
     }
@@ -10360,8 +10388,11 @@
     const stripsPerBox = pharmaStripsCount(prod.id);
     const price = stripsPerBox > 1 ? boxPrice / stripsPerBox : boxPrice;
     if (stripsPerBox > 1) {
-      let chosen = Math.round(qty);
-      if (!isFinite(chosen) || chosen < 1) chosen = 1;
+      /* 💊 بناء 16 (طلب المالك): الصنف اللي وحدته علبة يبدأ بالعلبة **كاملة**
+         (الكمية = عدد الشرائط بالعلبة)، والمستخدم ينزّل منها بعدين من القائمة.
+         لو المالك كتب كمية بإيده بنحترمها — بس جوه حدود العلبة. */
+      let chosen = posQtyTyped ? Math.round(qty) : stripsPerBox;
+      if (!isFinite(chosen) || chosen < 1) chosen = stripsPerBox;
       if (chosen > stripsPerBox) chosen = stripsPerBox;
       qty = chosen;
     }
@@ -11319,7 +11350,7 @@
     let html = "";
     for (let i = 1; i <= n; i++) {
       html += '<option value="' + i + '"' + (i === selected ? ' selected' : '') + '>' +
-        i + (i === 1 ? " شريط" : " شرائط") + '</option>';
+        i + (i === 1 ? " شريط" : " شرائط") + (i === n ? " — علبة كاملة" : "") + '</option>';
     }
     return html;
   }
@@ -11364,9 +11395,8 @@
       const stripN = Math.round(Number(it.stripsPerBox) || 0);
       const chosenStrip = Math.min(stripN, Math.max(1, Math.round(Number(it.stripsSelected || it.qty) || 1)));
       const qtyCell = stripN > 1
-        ? '<td class="qty-with-strips"><span class="strip-qty-pair"><select class="strip-select" data-f="strips" title="عدد الشرائط بالعلبة">' +
-          posStripOptions(stripN, chosenStrip) + '</select>' +
-          '<input class="cell-input" data-f="qty" type="text" value="' + esc(it.qty) + '" /></span></td>'
+        ? '<td class="qty-with-strips"><select class="strip-select" data-f="strips" title="عدد الشرائط بالعلبة">' +
+          posStripOptions(stripN, chosenStrip) + '</select></td>'
         : '<td><input class="cell-input" data-f="qty" type="text" value="' + esc(it.qty) + '" /></td>';
       const tr = document.createElement("tr");
       tr.dataset.idx = i;

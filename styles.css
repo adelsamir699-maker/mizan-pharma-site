@@ -1085,19 +1085,17 @@ body {
 
 .cell-input:focus { outline: 2px solid var(--sidebar-active); }
 
-/* 💊 بناء 14: سطر الشريط — قائمة عدد الشرائط + خانة الكمية في نفس الخانة.
-   على الشاشة الكبيرة وضع رأسي (القائمة فوق والعدد تحتها) عشان عمود الكمية ضيّق. */
+/* 💊 بناء 16: سطر الشريط بقى **مربع واحد فقط** (قائمة عدد الشرائط).
+   الكمية هي نفس الاختيار — مفيش خانة تانية فوقها/تحتها خالص. */
 .qty-with-strips { padding: 3px 4px !important; }
-.strip-qty-pair { display: flex; flex-direction: column; gap: 2px; width: 100%; min-width: 0; }
 .strip-select {
   width: 100%; min-width: 0; box-sizing: border-box;
-  padding: 3px 4px; text-align: center;
+  padding: 5px 4px; text-align: center;
   border: 1px solid var(--accent); border-radius: 4px;
-  font-family: inherit; font-size: 11.5px; font-weight: 800;
+  font-family: inherit; font-size: 12px; font-weight: 800;
   color: var(--primary-dark); background: #EFF6FF; cursor: pointer;
 }
 .strip-select:focus { outline: 2px solid var(--sidebar-active); }
-.qty-with-strips .cell-input { min-width: 0; padding: 3px 4px; }
 
 .c-fixed { color: var(--text-secondary); font-weight: 600; cursor: not-allowed; }
 .c-tax, .c-total { font-weight: bold; color: var(--primary-dark); }
@@ -2888,13 +2886,9 @@ tr.jrn-reversed td { color: var(--text-secondary); text-decoration: line-through
   .inv-dgv tbody td:nth-child(10)::before { content: ""; }
   .inv-dgv tbody td .cell-input { flex: 1 1 auto; width: auto; min-width: 0; height: 40px; font-size: 16px; text-align: center; }
   .inv-dgv tbody td .btn.small { height: 40px; padding: 0 10px; font-size: 14px; }
-  /* 💊 بناء 14: على الموبايل القائمة والعدد جنب بعض جوّه نفس «كارت» الصنف —
-     ما نزودش صفّ في شبكة الـ10 أعمدة، واللمس يفضل بحجم زرار مريح. */
+  /* 💊 بناء 16: مربع واحد بس جوّه «كارت» الصنف — بارتفاع زرار مريح للمس. */
   .inv-dgv tbody td.qty-with-strips { gap: 5px; }
-  .strip-qty-pair { flex: 1 1 auto; flex-direction: row; align-items: center; gap: 4px; height: 40px; }
-  .strip-select { flex: 1 1 auto; height: 40px; font-size: 13px; text-overflow: ellipsis; }
-  /* خصوصية كاملة عشان قاعدة `.inv-dgv tbody td .cell-input` اللي فوق ما تاخدش الأولوية */
-  .inv-dgv tbody td.qty-with-strips .cell-input { flex: 0 0 56px; width: 56px; height: 40px; font-size: 16px; }
+  .strip-select { flex: 1 1 auto; width: 100%; min-width: 0; height: 40px; font-size: 13px; text-overflow: ellipsis; }
 
   /* (ح) عمود الصافي والسداد بقى بطاقة كاملة العرض: رقم الصافي بارز بس مش بيبتلع نص الشاشة */
   .pos-side { gap: 8px; }
