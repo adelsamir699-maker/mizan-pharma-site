@@ -44,7 +44,7 @@ self.addEventListener("fetch", (event) => {
      مافيش أي كاش لبيانات المستخدم زي ما هو. */
   const u = new URL(event.request.url);
   if (event.request.method === "GET" && u.origin === self.location.origin &&
-    u.pathname.indexOf("/vendor/") === 0) {
+    u.pathname.indexOf("/vendor/") >= 0) {
     event.respondWith(
       (async () => {
         try {
