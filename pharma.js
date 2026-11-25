@@ -62,6 +62,12 @@
     return LS_PHARMA + (org ? ":" + org : ":local");
   }
   function blank () { return { products: {}, dispenses: [] }; }
+  // بناء 9: أي فشل في مسار الصيدلية لازم يظهر — في الكونسول على الأقل،
+  // وللمستخدم في الحالات اللي بتغيّر الرصيد أو البيانات.
+  function fail (what, e, userMsg) {
+    try { console.warn("PHARMA " + what, e); } catch (ignore) { }
+    if (userMsg) { try { notify(userMsg, "warning"); } catch (ignore) { } }
+  }
   function load () {
     if (CACHE) return JSON.parse(JSON.stringify(CACHE));
     try {
@@ -70,11 +76,11 @@
       d.products = d.products && typeof d.products === "object" ? d.products : {};
       d.dispenses = Array.isArray(d.dispenses) ? d.dispenses : [];
       return d;
-    } catch (e) { return blank(); }
+    } catch (e) { fail("قراءة الكاش المحلي", e); return blank(); }
   }
   function save (d) {
     CACHE = JSON.parse(JSON.stringify(d || blank()));
-    try { localStorage.setItem(storeKey(), JSON.stringify(CACHE)); } catch (e) { }
+    try { localStorage.setItem(storeKey(), JSON.stringify(CACHE)); } catch (e) { fail("حفظ الكاش المحلي", e); }
   }
   function queueCloud (p, what) {
     if (!p || typeof p.catch !== "function") return;
@@ -126,9 +132,9 @@
       };
     });
     CACHE = d;
-    try { localStorage.setItem(storeKey(), JSON.stringify(CACHE)); } catch (e) { }
+    try { localStorage.setItem(storeKey(), JSON.stringify(CACHE)); } catch (e) { fail("حفظ كاش بعد التحميل السحابي", e); }
     hydrated = true;
-    try { renderBatches(); renderDispenses(); renderReports(); renderRxStatus(); } catch (e) { }
+    try { renderBatches(); renderDispenses(); renderReports(); renderRxStatus(); } catch (e) { fail("رسم شاشات الصيدلية بعد التحميل", e); }
   }
   function entry (productId, create) {
     var d = load();
@@ -294,9 +300,17 @@
       // الفاتورة بيتخصم رصيدها قبل استدعاء الهوك — لو الدفعات ما كفتش، نرجّع الفرق عشان
       // الرصيد يفضل مطابق لمجموع الدفعات، ونعلّم الصرف إنه محتاج مراجعة.
       if (short > 0 && A && typeof A.addStockAt === "function") {
-        try { A.addStockAt(p, wh, short); A.saveProducts(); } catch (e) { }
-        notify("الكمية المتاحة من الدفعات (" + money(alloc.taken) + ") أقل من الكمية المصروفة (" +
-          money(it.qty) + ") — تمت تسوية الرصيد. راجع الدفعات.", "warning");
+        var fixed = true;
+        try { A.addStockAt(p, wh, short); A.saveProducts(); }
+        catch (e) {
+          fixed = false;
+          fail("تسوية الرصيد بعد الصرف", e,
+            "تعذّر تسوية رصيد " + (p.nameAr || p.code || "الصنف") + " — راجع المخزون يدويًا.");
+        }
+        if (fixed) {
+          notify("الكمية المتاحة من الدفعات (" + money(alloc.taken) + ") أقل من الكمية المصروفة (" +
+            money(it.qty) + ") — تمت تسوية الرصيد. راجع الدفعات.", "warning");
+        }
       }
       d.products[String(p.id)] = x;
       var refs = (alloc.used || []).map(function (u) {
@@ -550,7 +564,11 @@
     save(x.d);
     queueCloud(cloudUpsert("pharma_batches", cloudBatchRow(batch, p)), "batch save");
     if (stockAdded && A) {
-      try { A.addStockAt(p, wh, qty); A.saveProducts(); } catch (e) { }
+      try { A.addStockAt(p, wh, qty); A.saveProducts(); }
+      catch (e) {
+        fail("زيادة رصيد الدفعة", e,
+          "اتحفظت الدفعة بس الرصيد ما اتزودش — راجع المخزون يدويًا.");
+      }
     }
     if (A && typeof A.addActivity === "function") {
       A.addActivity("استلام دفعة صيدلية", p.nameAr + " — دفعة " + no + " — كمية " + money(qty));
@@ -575,7 +593,11 @@
     queueCloud(cloudRemove("pharma_batches", b.id), "batch delete");
     // الدفعات القديمة اللي قبل العلم ده اعتبرها «ما أضافتش رصيد» عشان ما يحصلش سالب.
     if (num(b.qty) > 0 && b.stockAdded === true && A) {
-      try { A.addStockAt(findProduct(pid), b.warehouse, -num(b.qty)); A.saveProducts(); } catch (e) { }
+      try { A.addStockAt(findProduct(pid), b.warehouse, -num(b.qty)); A.saveProducts(); }
+      catch (e) {
+        fail("خصم رصيد الدفعة المحذوفة", e,
+          "اتحذفت الدفعة بس الرصيد ما اتخصمosh — راجع المخزون يدويًا.");
+      }
     }
     renderBatches();
     renderReports();

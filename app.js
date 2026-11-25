@@ -25982,7 +25982,11 @@ id: nextVoucherId(),
     // 🆕 ترقية ٧٨ (ميزان فارما): تغطية جداول الصيدلية في النسخ/الاستعادة/التفريغ — اتنفّذت 25/11.
     "db/supabase-upgrade-78-pharma-backup-coverage.sql",
     // 🆕 ترقية ٧٩ (ميزان فارما): إعادة سجل الإجراءات السحابي mizan_log_activity (ترقية ٢٨ بالأصل).
-    "db/supabase-upgrade-79-activity-log.sql"];
+    "db/supabase-upgrade-79-activity-log.sql",
+    // 🆕 ترقية ٨٠ (ميزان فارما): إصلاح مسار استعادة شركة واحدة — credit_limit،
+    // حذف suppliers/products قبل الإدراج، وتوافق أعمدة products/categories/units الحالية.
+    // اتنفّذت 25/11 على مشروع ميزان فارما.
+    "db/supabase-upgrade-80-restore-customer-credit-limit.sql"];
   // ملفات موجودة في db/ بس مش داخلة في نسخة النشر — كل واحد بسبب مكتوب.
   // ملفات rollback لا تدخل الحزمة.
   // بناء 141: ترقية ٥ـ (قفل التسجيل + دوال الرموز) **اتنفّذت** 5/10 ≈01:29 ⇒ دخلت FILES فوق
