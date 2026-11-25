@@ -1,0 +1,3206 @@
+/* ===== نظام ألوان برنامج ميزان (UITheme) ===== */
+/* مهما كان الاختيار، خاصية hidden لازم تنتصر: لو العنصر فيه hidden يختفي، ولا صندوق الدخول ولا شاشاتها تظهر */
+[hidden] { display: none !important; }
+:root {
+  --primary-dark: #0F172A;
+  --sidebar-dark: #1E293B;
+  --sidebar-hover: #334155;
+  --sidebar-active: #0EA5E9;
+  --accent: #2563EB;
+  --success: #10B981;
+  --warning: #F59E0B;
+  --danger: #EF4444;
+  --info: #3B82F6;
+  --teal: #0D9488;
+  --bg: #F1F5F9;
+  --border: #E2E8F0;
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-muted: #94A3B8;
+  --sel-bg: #E0F2FE;
+  --sel-fg: #0369A1;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+  font-size: 13px;
+  font-weight: bold;
+  color: var(--text-primary);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  direction: rtl;
+  min-height: 100vh;
+}
+
+/* ===== الشريط العلوي ===== */
+.app-header {
+  background: var(--primary-dark);
+  color: #fff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.app-header .app-title { font-size: 15px; }
+.app-header .app-sub { color: var(--text-muted); font-size: 11px; margin-right: 10px; }
+.app-header .header-left { display: flex; gap: 16px; align-items: center; font-size: 12px; flex-wrap: wrap; }
+.app-header .db-status { color: #4ADE80; }
+
+/* ===== الهيكل العام ===== */
+.app-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+/* ===== القائمة الجانبية ===== */
+.sidebar {
+  width: 240px;
+  background: var(--sidebar-dark);
+  overflow-y: auto;
+  padding: 10px 0;
+  flex-shrink: 0;
+}
+
+.nav-btn {
+  display: block;
+  width: 100%;
+  text-align: right;
+  padding: 11px 16px;
+  background: transparent;
+  color: #E2E8F0;
+  border: none;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.nav-btn:hover { background: var(--sidebar-hover); }
+.nav-btn.active { background: var(--sidebar-active); color: #fff; }
+
+/* ===== 🧱 بناء 132 (طلب المالك): شريط الأقسام العلوي بدل القائمة الجانبية =====
+   «قسم فوق، ولما أفتحه تعمل لي قوائم تنزل» + «اللي مالوش صلاحية متظهرش من الأساس ولا مكانها فاضي».
+   `sidebar` لسه على نفس العنصر (الحارس الحيّ للمالك + إخفاء الطباعة)، و`.topnav` بتغيّر شكله بس. */
+.topnav {
+  width: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  overflow: visible;
+  flex-shrink: 0;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, .18);
+}
+.topnav .nav-btn {
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+  padding: 9px 14px;
+  border-radius: 9px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+/* القسم = زرار + قائمة منسدلة تحته */
+.topnav .sec { position: relative; }
+.sec-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 14px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: #E2E8F0;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sec-btn:hover { background: var(--sidebar-hover); }
+.sec-btn .chev { font-style: normal; font-size: 11px; opacity: .75; transition: transform .15s ease; }
+.topnav .sec.open .sec-btn { background: var(--sidebar-active); color: #fff; }
+.topnav .sec.open .sec-btn .chev { transform: rotate(180deg); }
+/* القسم اللي فيه الشاشة المفتوحة حاليًا — علامة إن المستخدم عارف هو فين */
+.topnav .sec.has-active .sec-btn { box-shadow: inset 0 0 0 1px rgba(14, 165, 233, .65); }
+.drop {
+  position: absolute;
+  top: calc(100% + 7px);
+  inset-inline-start: 0;
+  z-index: 60;
+  min-width: 244px;
+  max-width: 86vw;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px;
+  background: #fff;
+  border: 1px solid #CBD5E1;
+  border-radius: 12px;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, .22);
+}
+.topnav .sec.open .drop { display: flex; }
+.drop .nav-btn {
+  color: #0F172A;
+  width: 100%;
+  justify-content: flex-start;
+  text-align: start;
+  padding: 9px 12px;
+  border-radius: 8px;
+}
+.drop .nav-btn:hover { background: #E2E8F0; }
+.drop .nav-btn.active { background: var(--sidebar-active); color: #fff; }
+/* 🛠️ لوحة الإدارة: زرار عادي في نفس الشريط (لحساب المالك وحده — الـ hidden بيتحكّم فيه JS) */
+.nav-admin {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 14px;
+  border: 1px solid rgba(212, 175, 55, .55);
+  border-radius: 9px;
+  background: rgba(212, 175, 55, .14);
+  color: #d4af37;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.nav-admin:hover { background: rgba(212, 175, 55, .26); }
+/* الشاشة الضيقة: الشريط بيلف أسطر والقائمة بتنزل بعرض الشريط */
+@media (max-width: 860px) {
+  .topnav { padding: 6px 8px; gap: 4px; }
+  .topnav .nav-btn, .sec-btn { font-size: 12px; padding: 8px 10px; }
+  .drop { min-width: 210px; }
+}
+
+/* ===== منطقة العرض ===== */
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 14px;
+  overflow: auto;
+}
+
+.view {
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  padding: 0 4px;
+}
+
+/* شريط العنوان والأزرار (ارتفاع 44px) */
+.view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 4px 0;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.view-title { color: var(--primary-dark); font-size: 16px; }
+
+.view-actions { display: flex; gap: 8px; order: 2; }
+
+/* ===== الأزرار (FlatStyle.Flat) ===== */
+.btn {
+  border: none;
+  border-radius: 0;
+  padding: 9px 16px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: bold;
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn:active { transform: translateY(1px); }
+
+.btn.blue   { background: var(--accent); }
+.btn.blue:hover { background: #1D4ED8; }
+.btn.green  { background: var(--success); }
+.btn.green:hover { background: #059669; }
+.btn.teal   { background: var(--teal); }
+.btn.teal:hover { background: #0F766E; }
+.btn.sky    { background: var(--info); }
+.btn.sky:hover { background: #2563EB; }
+.btn.red    { background: var(--danger); }
+.btn.red:hover { background: #DC2626; }
+.btn.gray   { background: var(--bg); color: var(--text-secondary); border: 1px solid var(--border); }
+.btn.gray:hover { background: #E2E8F0; }
+.btn.light  { background: #F1F5F9; color: var(--text-secondary); }
+.btn.light:hover { background: #E2E8F0; }
+
+.view[hidden] { display: none !important; }
+
+/* ===== لوحة التحكم ===== */
+.kpi-row {
+  display: grid;
+  /* 📅 بناء 135 (سطر ٧): كارت «صافي ربح الشهر» دخل اللوحة ⇒ 7 كروت في السطر */
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.kpi-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-right: 5px solid var(--accent);
+  padding: 12px 14px;
+  min-height: 96px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+}
+
+.kpi-title { color: var(--text-secondary); font-size: 12px; }
+.kpi-value { color: var(--text-primary); font-size: 16px; white-space: nowrap; }
+
+/* 🧾 بناء 190: كارت «أرصدة الأموال» المفصّل (نقدية/بنوك/محافظ/إنستا باي/شيكات) */
+.kpi-money-card { overflow: visible; }
+.kpi-lines { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.kpi-line { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 12px; color: var(--text-secondary); }
+.kpi-line b { font-size: 13px; color: var(--text-primary); white-space: nowrap; }
+.kpi-line-total { border-top: 1px dashed var(--border); padding-top: 3px; margin-top: 2px; font-weight: 700; }
+.kpi-line-total b { font-size: 15px; }
+.kpi-sub { margin-top: 4px; font-size: 11px; color: var(--text-secondary); }
+
+.tables-row {
+  display: flex;
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+}
+
+.data-panel {
+  flex: 1;
+  background: #fff;
+  border: 1px solid var(--border);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.panel-title { color: var(--primary-dark); font-size: 14px; margin-bottom: 10px; }
+.data-panel .table-wrap { border: none; }
+
+@media (max-width: 1100px) {
+  /* بناء 135: 7 كروت ⇒ 4+3 بدل 3+3+1 (اليتيم اللي كان بيوصل بعرض الشاشة كامل) */
+  .kpi-row { grid-template-columns: repeat(4, 1fr); }
+  .tables-row { flex-direction: column; }
+}
+
+@media (max-width: 620px) {
+  .kpi-row { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ===== شريط البحث (46px) ===== */
+.search-bar {
+  background: #F8FAFC;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  flex-wrap: wrap;
+}
+
+.search-input {
+  order: 2;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: bold;
+  flex: 1 1 260px;
+  max-width: 420px;
+}
+
+.search-input:focus { outline: 2px solid var(--sidebar-active); }
+
+.search-label { color: var(--primary-dark); font-size: 13px; }
+
+/* ===== الجدول (DataGridView) ===== */
+.table-wrap { flex: 1; overflow: auto; background: #fff; border: 1px solid var(--border); margin-top: 0; }
+
+.dgv {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  font-size: 13px;
+}
+
+.dgv thead th {
+  background: var(--bg);
+  color: var(--text-primary);
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+  font-size: 13px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.dgv tbody td {
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.dgv tbody tr:nth-child(even) { background: #F8FAFC; }
+.dgv tbody tr:hover { background: var(--sel-bg); }
+.dgv tbody tr.selected { background: var(--sel-bg); color: var(--sel-fg); }
+.dgv tbody tr { cursor: pointer; }
+
+/* 🔢 بناء 270 (طلب المالك): رقم الصنف المسلسل جوه الفاتورة — 1-2-3-4 بعدد أصنافها */
+.c-serial { text-align: center; font-weight: 700; color: var(--text-muted); }
+
+/* في فاتورتي المبيعات والمشتريات: تصغير الصفوف ليدخل أكبر عدد ممكن من الأصناف (8 أسطر على الأقل) */
+#viewSales .dgv, #viewPurchases .dgv { font-size: 12px; }
+#viewSales .dgv thead th, #viewPurchases .dgv thead th { padding: 3px 4px; font-size: 12px; }
+#viewSales .dgv tbody td, #viewPurchases .dgv tbody td { padding: 2px 4px; font-size: 12px; }
+#viewSales .dgv tbody tr, #viewPurchases .dgv tbody tr { height: 24px; }
+
+.balance-debit { color: var(--danger); font-weight: bold; }
+.balance-credit { color: var(--success); font-weight: bold; }
+
+/* 🧱 بناء 216: ألوان حالة الشيك — الصف كله بيتلوّن، والشيك نفسه مايتحذفش أبدًا */
+.chk-st-pending { color: #1D4ED8 !important; font-weight: 800; }
+.chk-st-collected { color: #15803D !important; font-weight: 800; }
+.chk-st-cancelled { color: #B91C1C !important; font-weight: 800; }
+#dgvChecks tbody tr.chk-row-pending { background: #EFF6FF; }
+#dgvChecks tbody tr.chk-row-collected { background: #F0FDF4; }
+#dgvChecks tbody tr.chk-row-returned,
+#dgvChecks tbody tr.chk-row-cancelled { background: #FEF2F2; }
+
+/* ================== 🎨 بناء 123 (بند 5): اتجاه المبلغ في الشاشات المالية ==================
+   القاعدة: أي «إيراد / داخل» أخضر وأي «مصروف / خارج» أحمر — في الشاشات المالية بس.
+   دول كلاسات اتجاه (amt-in/amt-out) ومختلفين عن balance-debit/credit اللي معناها
+   طرف الرصيد في الحساب. الكلاسات بتتضاف من app.js عن طريق moneyDirOf/amtCls/amtTd/paintDir،
+   ومصدر الحقيقة واحد: مافيش شاشة بتكتب اللون بنفسها.
+   ملاحظة ترتيب: القواعد دي بعد .kpi-value (سطر 200) عشان تتغلّب عليها بنفس الأولوية. */
+.amt-in  { color: var(--success); font-weight: 700; }
+.amt-out { color: var(--danger);  font-weight: 700; }
+
+/* ===== التذييل ===== */
+.app-footer {
+  background: var(--primary-dark);
+  color: var(--text-muted);
+  font-size: 11px;
+  text-align: center;
+  padding: 8px;
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* ===== النوافذ الحوارية (Modals) ===== */
+/* z-index أعلى من .login-screen (2000) عشان النوافذ اللي بتتفتح من
+   شاشات الدخول (تسجيل دخول شركة) تبان فوقها. و bdi z-index 3001
+   عشان التوست يفضل فوق النافذة. */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+}
+
+/* 🛡️ بناء 267: نافذة تنبيه نقص السيولة تظهر دائمًا فوق أي نافذة أخرى (بما فيها نافذة التحويل) */
+#mFundsShort {
+  z-index: 4000 !important;
+}
+
+.modal-overlay[hidden] { display: none; }
+
+.modal {
+  background: #fff;
+  min-width: 480px;
+  max-width: 96vw;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.35);
+  padding: 18px 20px;
+  animation: pop 0.15s ease;
+}
+
+.modal.m480 { width: 510px; }
+.modal.m500 { width: 530px; }
+.modal.m560 { width: 590px; }
+.modal.m640 { width: 680px; }
+
+.modal-tall { max-height: 90vh; display: flex; flex-direction: column; }
+/* بناء 172: أي جدول داخل نافذة طويلة لازم يقدر يصغر ويتمرّر (flex item بلا min-height:0
+   بيتمدد بحجم محتواه فيطلع بره الشاشة — سبب «الجدول طويل والبحث مش ظاهر» في نافذة اختيار الفاتورة). */
+.modal-tall .table-wrap { min-height: 0; }
+
+@keyframes pop {
+  from { transform: scale(0.96); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.modal h3 {
+  font-size: 15px;
+  color: var(--primary-dark);
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--bg);
+}
+
+/* نموذج الإدخال: تسمية يمين ثم خانة */
+.form-grid {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 10px 12px;
+  align-items: center;
+}
+
+.form-grid label { font-size: 13px; color: var(--text-secondary); }
+
+.form-grid input, .form-grid select {
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: bold;
+  background: #fff;
+}
+
+.form-grid input:focus, .form-grid select:focus { outline: 2px solid var(--sidebar-active); }
+
+.form-grid input:disabled { background: #F1F5F9; color: var(--text-muted); }
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-start;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+/* ===== نافذة خيارات العميل ===== */
+.act-info {
+  background: #F8FAFC;
+  padding: 12px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+}
+
+.act-head { font-size: 15px; color: var(--primary-dark); margin-bottom: 6px; }
+.act-line { color: var(--text-secondary); font-size: 13px; margin-top: 4px; }
+.act-bal { font-size: 14px; margin-top: 8px; }
+
+.act-btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.act-btns .btn { padding: 12px 14px; }
+.act-row3, .act-row4 { grid-column: 1 / -1; }
+.act-row4 { background: var(--bg); color: var(--text-secondary); border: 1px solid var(--border); }
+.act-row4:hover { background: #E2E8F0; }
+
+/* ===== كشف الحساب ===== */
+/* 🆕 بناء 230: كشف العميل/المورد أعرض والأرقام أوضح، وتاريخا الفترة في سطر واحد */
+.stmt-modal { width: 1100px; }
+.stmt-modal .search-bar { flex-wrap: nowrap; gap: 8px; }
+.stmt-modal .filter-label { flex: 0 0 auto; white-space: nowrap; }
+.stmt-modal .search-input { flex: 0 0 150px; max-width: 150px; }
+.stmt-modal #stmPeriodInfo { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stmt-modal .stmt-table th, .stmt-modal .stmt-table td { font-size: 13px; padding: 8px 10px; }
+.stmt-modal .stmt-table td:nth-child(3), .stmt-modal .stmt-table td:nth-child(4), .stmt-modal .stmt-table td:nth-child(5) {
+  font-variant-numeric: tabular-nums; font-weight: 700;
+}
+.stmt-modal .stmt-table td:nth-child(1), .stmt-modal .stmt-table th:nth-child(1) { width: 118px; }
+.stmt-modal .stmt-table td:nth-child(3), .stmt-modal .stmt-table th:nth-child(3),
+.stmt-modal .stmt-table td:nth-child(4), .stmt-modal .stmt-table th:nth-child(4),
+.stmt-modal .stmt-table td:nth-child(5), .stmt-modal .stmt-table th:nth-child(5) { width: 132px; }
+@media (max-width: 900px) {
+  .stmt-modal { width: 96vw; }
+  .stmt-modal .search-bar { flex-wrap: wrap; }
+  .stmt-modal .search-input { flex: 1 1 130px; max-width: none; }
+}
+.stmt-scroll { overflow: auto; flex: 1; min-height: 0; }
+
+.stmt-head-mini {
+  background: #F8FAFC;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+}
+
+.stmt-table tbody td { padding: 6px; text-align: center; white-space: nowrap; }
+
+/* ===== 🔁 بناء 119: عمود «إجراءات» في كشف الحساب (الشاشة فقط — الورقة 5 أعمدة) ===== */
+.stmt-table th.stm-act, .stmt-table td.stm-act { width: 84px; min-width: 84px; }
+.stmt-table td.stm-act .btn.stm-del-btn { padding: 4px 8px; font-size: 11.5px; margin: 0; }
+.stmt-table .stm-act-locked { opacity: .5; cursor: help; font-size: 13px; }
+
+/* ===== 🆕 شاشة «كشف حساب الحسابات» (من القيود اليومية) ===== */
+.acs-code { flex: 0 1 170px; min-width: 130px; }
+.acs-pick {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+}
+.acs-list {
+  flex: 0 1 470px;
+  min-width: 280px;
+  max-width: 640px;
+  border: 1px solid var(--border);
+  background: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: bold;
+  color: var(--text-primary);
+  padding: 6px;
+}
+.acs-list:focus { outline: 2px solid var(--sidebar-active); }
+.acs-list option { padding: 4px 8px; }
+.acs-list option:checked {
+  background: var(--sel-bg) linear-gradient(0deg, var(--sel-bg), var(--sel-bg));
+  color: var(--sel-fg);
+}
+.acs-side {
+  flex: 1 1 320px;
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.acs-period { border: 1px solid var(--border); }
+.acs-period .search-input { flex: 0 1 175px; min-width: 140px; }
+@media (max-width: 860px) {
+  .acs-list { flex: 1 1 100%; max-width: none; }
+}
+
+/* ===== 🆕 سجل الأصول الثابتة (مهمة 98) ===== */
+/* لافتة «الإهلاك أكبر من التكلفة»: نفس روح لافتة كمية المرتجع — تحذير ودّي بالأرقام قبل المنع */
+#mFixedAddEditBox .fx-over-warn {
+  margin: 4px 0 10px;
+  padding: 9px 12px;
+  border: 1.5px solid #E4A11B;
+  border-radius: 9px;
+  background: #FFF7E6;
+  color: #8A5300;
+  font-size: 12.3px;
+  font-weight: 700;
+  line-height: 1.75;
+}
+/* الحقل المرفوض بالأحمر — بدون أي قصّ صامت للقيمة */
+#mFixedAddEditBox input.input-bad {
+  border-color: #D64545;
+  background: #FFF2F2;
+  color: #8E2C2C;
+}
+#fxFNet { background: #F1F5F9; font-weight: 800; }
+
+/* ===== التنبيهات (Toast) ===== */
+.toast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3001;
+  padding: 12px 22px;
+  color: #fff;
+  font-size: 14px;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.35);
+  max-width: 90vw;
+  text-align: center;
+}
+
+.toast.success { background: var(--success); }
+.toast.error { background: var(--danger); }
+.toast.warning { background: var(--warning); }
+.toast.info { background: var(--accent); }
+
+/* 🆕 T3 — رسالة وسط الشاشة (تظهر شوية وتختفي) بديل نافذة الطباعة لما الإعداد = «لا». */
+.center-flash {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3002;
+  padding: 18px 30px;
+  background: var(--success);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  border-radius: 12px;
+  box-shadow: 0 12px 34px rgba(15, 23, 42, 0.4);
+  max-width: 90vw;
+  text-align: center;
+  animation: centerFlashPop .18s ease-out;
+}
+@keyframes centerFlashPop { from { opacity: 0; transform: translate(-50%, -46%) scale(.94); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+
+/* صفحة الطباعة */
+.print-only { display: none; }
+
+.statements { page-break-after: always; }
+
+/* ===== الطباعة ===== */
+@media print {
+  body { background: #fff; }
+  .app-header, .sidebar, .app-footer, .modal-overlay, .toast, .center-flash { display: none !important; }
+  /* توقيع المبرمج/رقمه/رابط الموقع: على الشاشات بس — ممنوع يظهر في أي طباعة */
+  .screen-only { display: none !important; }
+  /* 🗑️ عمود «إجراءات» في كشف الحساب: على الشاشة بس — ورق العميل يفضل 5 أعمدة (build 119) */
+  .stm-act { display: none !important; }
+  .content { padding: 0; overflow: visible; }
+  .print-only { display: none !important; }
+  .print-only.print-target { display: block !important; }
+  /* تعويض الهامش الرأسي الصغير (5mm) اللي بيخفي رأس/تذييل كروم عن الورقة —
+     مسافة التنفس تبقى جوه المستند نفسه، والحراري سيبناه مظبوط على مقاسه */
+  .print-only.print-target { padding-top: 5mm; padding-bottom: 5mm; }
+  .print-only.print-target.paper-thermal { padding-top: 0; padding-bottom: 0; }
+  /* 🔧 بناء 260 (#342): عزل الورقة ما بقاش متوقف على كلاس يضيفه JS.
+     القديمة كانت «body.printing .view:not(.print-target)» — وكلاس printing بيضيفه printSection
+     وحده، فأي طباعة ما عدّتش عليه (Ctrl+P من المتصفح، أو طلب تاني بلعه قفل الطباعة) كانت بترسم
+     شاشات العمل كلها على الورقة: رءوس الجداول وسطورها. بلاغ المالك الحرفي:
+     «سطور طباعة كشف الحساب فى الاستعلام عن الفواتير موجود اسفل الفاتورة و ايضا راس جدول اسفل الكشف».
+     القاعدة الجديدة: في وسائط الطباعة لا يظهر إلا المستند المختار (print-target) — وبلا مستند
+     مختار تبقى الورقة فاضية، بلا أي سطر شاشة ولا راس جدول. (شاشات الدخول/انتهاء الاشتراك مالهاش
+     أي سبب تظهر على ورق أبدًا.) */
+  .view:not(.print-target) { display: none !important; }
+  .login-screen { display: none !important; }
+  .statement-page {
+    direction: rtl;
+    padding: 10px;
+  }
+  .statement-head { text-align: center; margin-bottom: 16px; }
+  .statement-head h2 { font-size: 18px; color: #0F172A; margin-bottom: 6px; }
+  .stmt-brand { color: #64748B; font-size: 12px; margin-top: 8px; }
+  .stmt-table { width: 100%; border-collapse: collapse; }
+  .stmt-table th, .stmt-table td { border: 1px solid #94A3B8; padding: 6px; text-align: center; font-size: 12px; direction: rtl; }
+  .stmt-table th { background: #F1F5F9; }
+}
+
+/* التجاوب مع الشاشات الصغيرة */
+@media (max-width: 860px) {
+  /* بناء 132: الشريط بقى فوق على كل المقاسات ⇒ مافيش عمود جانبي يتقفل، والأزرار تلف أسطر */
+  .sidebar { width: 100%; display: flex; flex-wrap: wrap; gap: 4px; padding: 6px; overflow: visible; }
+  .topnav .nav-btn { width: auto; flex: 0 1 auto; font-size: 12px; padding: 8px 10px; }
+  .view-header { flex-direction: column; align-items: stretch; }
+  .view-actions { justify-content: flex-start; }
+  .form-grid { grid-template-columns: 1fr; gap: 6px; }
+  .form-grid label { font-size: 12px; }
+  .modal { min-width: 0; width: 96vw; }
+  .act-btns { grid-template-columns: 1fr; }
+}
+
+/* ===== شاشة الأصناف والمخزون ===== */
+.btn.orange { background: var(--warning); }
+.btn.orange:hover { background: #D97706; }
+
+.btn.small { padding: 6px 10px; font-size: 12px; }
+
+.filter-select {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: bold;
+  background: #fff;
+  min-width: 140px;
+}
+
+.filter-select:focus { outline: 2px solid var(--sidebar-active); }
+.filter-label { color: var(--text-secondary); font-size: 13px; }
+
+.dgv tbody .cell-actions { text-align: center; }
+.dgv tbody .badge {
+  display: inline-block;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: bold;
+}
+.badge-active { background: #D1FAE5; color: #047857; }
+.badge-inactive { background: #FEE2E2; color: #B91C1C; }
+.badge-discount { background: #FEF3C7; color: #B45309; }
+.badge-none { background: #F1F5F9; color: #64748B; }
+
+/* ===== نافذة إضافة / تعديل صنف ===== */
+.form-grid-scroll { max-height: 60vh; overflow-y: auto; padding-left: 4px; }
+
+.modal.m760 { width: 820px; }
+
+/* ===== نافذة جرد المخزون ===== */
+.stk-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.stk-top select {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: bold;
+  background: #fff;
+  min-width: 220px;
+}
+
+.stk-summary { color: var(--primary-dark); font-weight: bold; }
+
+.fld-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.fld-block label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: bold;
+}
+
+.fld-block select,
+.fld-block input {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: bold;
+  background: #fff;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.fld-block select:focus,
+.fld-block input:focus { outline: 2px solid var(--sidebar-active); }
+
+.stk-mini {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: normal;
+  margin-top: 2px;
+  direction: ltr;
+  text-align: right;
+}
+
+.stk-grid-wrap {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+
+.stk-qty-input {
+  width: 90px;
+  padding: 5px 8px;
+  text-align: center;
+  border: 1px solid var(--border);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.stk-qty-input:focus { outline: 2px solid var(--sidebar-active); }
+
+.stk-hint {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-top: 12px;
+  line-height: 1.6;
+}
+
+.diff-pos { color: var(--success); font-weight: bold; }
+.diff-neg { color: var(--danger); font-weight: bold; }
+.diff-zero { color: var(--text-muted); }
+
+/* ===== شاشة الجرد بالباركود (بناء 145) ===== */
+/* أي لون تاني في البلوك دي من متغيرات الثيم (var(--*)) — والاستثناء الوحيد هو الأبيض
+   #fff لخانات الاختيار والشرائط، وهو نفس الاستثناء المحفوظ في ورقة ملصقات الباركود (بناء 142). */
+.sc-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: var(--sel-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin: 10px 0;
+}
+
+.sc-sum {
+  flex: 1 1 auto;
+  color: var(--primary-dark);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.sc-acc { display: inline-flex; align-items: center; gap: 6px; }
+.sc-acc label { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+
+.sc-acc select {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: bold;
+  background: #fff;
+  min-width: 220px;
+}
+
+.sc-sheets {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 10px;
+  padding: 6px 12px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.sc-sheets label { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+
+.sc-sheets select {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: bold;
+  background: var(--bg);
+  min-width: 240px;
+}
+
+.sc-state { color: var(--text-muted); font-size: 11.5px; }
+
+.sc-count-input { width: 110px; }
+#dgvStockCount .stk-diff { text-align: center; }
+#dgvStockCount td:last-child { text-align: center; }
+
+/* شاشة فواتير المبيعات (POS) */
+.btn.dark { background: var(--primary-dark); }
+.btn.dark:hover { background: #020617; }
+
+.pos-fields {
+  background: #fff;
+  border: 1px solid var(--border);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pos-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.fld {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* عروض مضغوطة لصف الفاتورة */
+.fld-cust { width: 210px; }
+.fld-code { width: 95px; }
+.fld-qty { width: 80px; }
+.fld-price { width: 120px; }
+
+.fld.grow { flex: 1 1 200px; }
+.fld.grow2 { flex: 1 1 240px; }
+.fld-btn { justify-content: flex-end; }
+
+/* ═══ بناء 171 (طلب المالك 16/10): مربع الإجمالي الطولي في شاشتي البيع/الشراء ═══
+   المربع ياخد مكان الكمية + السعر + زرار الإضافة (طرف الصف) ويمتد لفوق لحد تحت
+   زرّي الإضافة في الرأس؛ والكمية/السعر/الإضافة يفضلوا في نفس السطر لأن اسم الصنف
+   يصغّر. الشكل: حواف مدوّرة + خلفية وردي فاتح + كتابة سودا تقيلة (بلا ألوان غامقة). */
+.pos-fields-entry { display: flex; gap: 14px; align-items: stretch; }
+.entry-right { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.entry-row2 { flex-wrap: nowrap; }
+.entry-row2 .fld.grow { flex: 0 1 230px; min-width: 130px; }
+.entry-row2 .fld.grow input { width: 100%; }
+
+.inv-total-box {
+  flex: 0 0 300px;
+  width: 300px;
+  align-self: stretch;
+  background: #FCE4EC;
+  border: 2.5px solid #EC4899;
+  border-radius: 16px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 16px;
+  min-height: 150px;
+}
+.inv-total-box .t-label { font-size: 20px; font-weight: 900; color: #111; letter-spacing: .5px; }
+.inv-total-box .t-value { font-size: 40px; font-weight: 900; color: #000; line-height: 1.05; direction: rtl; }
+.inv-total-box .t-cur { font-size: 20px; font-weight: 800; color: #111; }
+
+/* ═══ بناء 199 (طلب المالك 19/10): عمود جانبي = مربع الإجمالي + **لوحة السداد** بلون مستقل ═══
+   اللوحة بلون مختلف عن الفاتورة (أخضر مالي فاتح) مع شريط جانبي ملوّن + عناوين واضحة،
+   ونفس الأسلوب المتبع في أنظمة ERP المعتمدة (Odoo/Zoho): لوحة دفع مستقلة + جدول سطور. */
+.entry-side { flex: 0 0 300px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+/* المربع واخد `flex:0 0 300px` فوق (كان عرضه في صف) — في العمود بيبقى **طول** 300px ⇒ نثبّته 300×150 */
+.entry-side .inv-total-box { width: 100%; flex: 0 0 auto; height: 150px; align-self: auto; box-sizing: border-box; }
+
+.pay-panel {
+  background: #F0FDF4;
+  border: 1px solid #BBF7D0;
+  border-inline-start: 5px solid #16A34A;
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(16, 163, 74, .10);
+  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.pay-panel-buy { background: #EFF6FF; border-color: #BFDBFE; border-inline-start-color: #2563EB; box-shadow: 0 2px 8px rgba(37, 99, 235, .10); }
+.pay-panel-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pay-panel-title { font-size: 13px; font-weight: 900; color: #14532D; letter-spacing: .2px; }
+.pay-panel-buy .pay-panel-title { color: #1E3A8A; }
+.pay-panel-cash { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: #15803D; background: #DCFCE7; border: 1px solid #BBF7D0; border-radius: 999px; padding: 2px 10px; }
+.pay-panel-cash b { font-size: 15px; font-weight: 900; color: #065F46; font-variant-numeric: tabular-nums; }
+.pay-panel-buy .pay-panel-cash { color: #1D4ED8; background: #DBEAFE; border-color: #BFDBFE; }
+.pay-panel-buy .pay-panel-cash b { color: #1E3A8A; }
+.pay-add-btn { height: 28px !important; padding: 0 10px; margin-inline-start: auto; white-space: nowrap; }
+.pay-panel-body { display: flex; flex-direction: column; gap: 6px; max-height: 168px; overflow: auto; }
+.pay-panel .pos-paid-row { margin-top: 0; }
+.pay-panel .pos-paid-label { font-size: 12px; font-weight: 800; color: #166534; }
+.pay-panel-buy .pos-paid-label { color: #1E40AF; }
+.pay-cash-inp { flex: 0 0 130px; text-align: center; font-weight: 900; font-size: 14px; background: #fff !important; color: #065F46 !important; border: 1.5px solid #86EFAC !important; border-radius: 8px; font-variant-numeric: tabular-nums; }
+.pay-panel-buy .pay-cash-inp { color: #1E3A8A !important; border-color: #93C5FD !important; }
+.pay-panel .pay-line { background: #fff; border-color: #BBF7D0; }
+.pay-panel-buy .pay-line { border-color: #BFDBFE; }
+.pay-panel .pl-amount { font-variant-numeric: tabular-nums; }
+
+/* 🆕 بناء 199 (شكوى المالك: «الجزء اللي فوق واخد معظم الشاشة والأصناف صغيرة») —
+   رأس الفاتورة مضغوط، والمساحة الزايدة تروح لجدول الأصناف. */
+.pos-fields { padding: 6px 8px; gap: 6px; }
+.pos-row { gap: 8px; }
+.fld { gap: 2px; }
+.fld label { font-size: 11px; }
+.fld input, .fld select { padding: 5px 7px; font-size: 12.5px; }
+.entry-right { gap: 6px; }
+.pos-fields-entry { gap: 10px; }
+@media (max-width: 980px) { .entry-side { flex: 1 1 100%; } }
+
+.fld label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.fld .lbl-accent { color: var(--accent); font-weight: bold; }
+
+.fld input, .fld select {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: bold;
+  background: #fff;
+}
+
+.fld input:focus, .fld select:focus { outline: 2px solid var(--sidebar-active); }
+.fld input.ro { background: var(--bg); color: var(--text-secondary); }
+.fld button { height: 34px; }
+
+/* سطر أعلى حقل اسم الصنف: الاسم + الرصيد، وعند الضيق ينزل الرصيد لسطر لوحده */
+.fld-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 18px;
+}
+
+.stock-hint {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: bold;
+  color: var(--accent);
+  background: #EFF6FF;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin-bottom: 2px;
+}
+
+/* ===== حقول داخل جدول الأصناف ===== */
+.cell-input {
+  width: 100%;
+  min-width: 56px;
+  padding: 4px 6px;
+  text-align: center;
+  border: 1px solid var(--border);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: bold;
+  background: #fff;
+}
+
+.cell-input:focus { outline: 2px solid var(--sidebar-active); }
+
+.c-fixed { color: var(--text-secondary); font-weight: 600; cursor: not-allowed; }
+.c-tax, .c-total { font-weight: bold; color: var(--primary-dark); }
+
+.pos-footer {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--primary-dark);
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pos-foot-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ft-sub, .ft-tax { color: var(--text-secondary); }
+.ft-total {
+  font-size: 17px;
+  font-weight: bold;
+  color: var(--info);
+  margin-inline-start: auto;
+}
+
+/* 🆕 سطر ٢ (09/10): سطر «مجاميع الفرز» في استعلام الفواتير — الأرقام كلها من
+   `invQueryTotals` في app.js، وده تنسيق بس (بلا أي `#hex` — قاعدة الثيم). */
+.inv-q-tots {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--primary-dark);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.inv-q-tots.inv-q-empty {
+  color: var(--text-secondary);
+  font-weight: normal;
+  border-inline-start-color: var(--border);
+}
+
+.fld-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fld-inline input {
+  width: 110px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.inv-foot-print {
+  margin-top: 14px;
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.8;
+  font-weight: bold;
+}
+
+/* ===== تبويبات ===== */
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.tab-btn {
+  padding: 9px 22px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: bold;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.tab-btn.active {
+  background: var(--primary-dark);
+  color: #fff;
+  border-color: var(--primary-dark);
+}
+
+/* ===== صفوف التقارير ===== */
+.rpt-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+@media (max-width: 900px) {
+  .rpt-row { grid-template-columns: 1fr; }
+}
+
+/* ===== شبكة المركز المالي ===== */
+.bal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+@media (max-width: 1100px) {
+  .bal-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 900px) {
+  .bal-grid { grid-template-columns: 1fr; }
+}
+
+/* 🆕 مهمة 97: أقسام قائمة المركز المالي (عناوين المجموعات + الإجماليات) على الشاشة والورقة */
+.bal-group > td {
+  background: rgba(201, 169, 110, 0.14);
+  color: var(--ink, #2c2c2c);
+  text-align: right;
+}
+
+.bal-sub > td {
+  border-top: 1px dashed var(--border, #d8d8d8);
+  color: #1d4ed8;
+}
+
+.bal-total > td {
+  background: rgba(29, 78, 216, 0.08);
+  border-top: 2px solid var(--border, #cfcfcf);
+}
+
+.bal-empty {
+  color: #7a7a7a;
+  font-style: italic;
+  text-align: right;
+}
+
+/* ===== الإعدادات ===== */
+.sett-box {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-top: 14px;
+}
+
+.sett-box .form-grid { grid-template-columns: 220px 1fr; }
+
+.sett-btns {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+/* إضافات ترقية v34: ألواح التبويبات داخل الإعدادات */
+.sett-pane {
+  animation: fadein .18s ease;
+}
+
+.sett-toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.sett-pane .data-table td, .sett-pane .data-table th {
+  white-space: nowrap;
+}
+
+/* جداول شاشات الضبط: عرض كامل وواضح (السابق كان بلا تنسيق فبدت ضيقة) */
+#viewSettings table.data-table,
+#viewClientSettings table.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  min-width: 820px;
+}
+#viewSettings table.data-table th,
+#viewClientSettings table.data-table th {
+  background: #f1f5f9;
+  padding: 9px 10px;
+  text-align: right;
+  border-bottom: 2px solid #cbd5e0;
+  white-space: nowrap;
+}
+#viewSettings table.data-table td,
+#viewClientSettings table.data-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+#viewSettings table.data-table tbody tr:hover,
+#viewClientSettings table.data-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+/* عشاء التبويب المقفول (الميزة غير مفعلة) */
+.pane-locked {
+  position: relative;
+  border: 1px dashed var(--danger);
+  border-radius: 10px;
+  background: repeating-linear-gradient(45deg, #FFF7F7, #FFF7F7 10px, #FFEFEF 10px, #FFEFEF 20px);
+  padding: 14px 16px;
+  margin-top: 14px;
+  color: var(--danger);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.pane-locked .plk-icon { font-size: 20px; }
+
+.tab-btn.locked {
+  color: var(--text-muted);
+  border-style: dashed;
+  cursor: not-allowed;
+  background: #FAFAFA;
+}
+
+/* استبدال دمج: الحقل المقفل داخل جدول */
+.sett-edit-row td {
+  padding: 2px !important;
+}
+
+@keyframes fadein {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== أسطر القيد اليومي ===== */
+.jrn-lines {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.jrn-head, .jrn-line {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 44px;
+  gap: 8px;
+  padding: 6px 10px;
+  align-items: center;
+}
+
+.jrn-head {
+  background: var(--primary-soft);
+  font-weight: bold;
+  font-size: 12px;
+  color: var(--primary-dark);
+}
+
+.jrn-line select, .jrn-line input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.jrn-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+#jrnSum {
+  font-weight: bold;
+  color: var(--info);
+}
+
+/* ===== شريط مخصص للنافذة الافتراضي ===== */
+.filter-label {
+  color: var(--text-secondary);
+  font-weight: bold;
+  font-size: 12px;
+}
+
+.stk-summary {
+  font-weight: bold;
+  color: var(--primary-dark);
+}
+
+/* ===== شاشة تسجيل الدخول (أونلاين) ===== */
+.login-screen{position:fixed;inset:0;background:linear-gradient(135deg,#0f2a43,#123a5c);z-index:2000;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto}
+.login-box{background:#fff;border-radius:14px;padding:26px 28px;width:100%;max-width:400px;box-shadow:0 18px 50px rgba(0,0,0,.35);text-align:center;margin:auto}
+.login-logo{font-size:46px;margin-bottom:6px}
+.login-box h2{margin:0 0 4px;color:#123a5c;font-size:22px}
+.login-sub{margin:0 0 16px;color:#6b7a8a;font-size:13px}
+.login-tabs{display:flex;gap:8px;margin:0 0 14px}
+.ltab{flex:1;padding:9px;border:1px solid #cbd5e0;background:#f1f5f9;color:#334;border-radius:8px;cursor:pointer;font-weight:600}
+.ltab.active{background:#1d7a46;border-color:#1d7a46;color:#fff}
+.login-box .inp{width:100%;box-sizing:border-box;margin-bottom:10px}
+.pw-wrap{position:relative;width:100%;margin-bottom:10px}
+.pw-wrap .inp{margin-bottom:0;padding-left:38px}
+.pw-eye{position:absolute;top:50%;left:4px;transform:translateY(-50%);background:transparent;border:none;font-size:18px;cursor:pointer;opacity:.7;padding:4px}
+.pw-eye:hover{opacity:1}
+.login-box .filter-label{display:block;text-align:right;margin:4px 0 3px;font-weight:600;color:#334;font-size:13px}
+.login-box.login-box-wide{max-width:640px}
+/* شاشة «حسابات شركتك» — عرض أكبر لأنها جدول حسابات */
+#memberScreen .login-box{max-width:960px;width:100%;padding:26px 30px;text-align:right}
+#memberScreen h2,#memberScreen .login-logo{text-align:center}
+#memberScreen .login-sub{text-align:right}
+#memberScreen #memberList{max-height:54vh;overflow:auto}
+#memberScreen #memberList table{width:100%}
+#memberScreen .login-actions{max-width:760px;margin-left:auto;margin-right:auto}
+.btn.full{width:100%}
+.login-msg{margin-top:10px;font-size:13px;min-height:18px;color:#6b7a8a}
+.login-msg.err{color:#c0392b;font-weight:600}
+.login-msg.ok{color:#1d7a46;font-weight:600}
+/* بناء 224: «تحذير» كان بيوصل بـ class login-msg warn من غير أي قاعدة = نص عادي */
+.login-msg.warn{color:var(--warning);font-weight:600}
+.btn.small{padding:5px 10px;font-size:12px;margin-right:8px}
+.btn.red{background:#c0392b}
+.btn.red:hover{background:#a93226}
+
+
+/* حقول الإدخال الموحدة */
+.inp{padding:9px 11px;border:1px solid #cbd5e0;border-radius:8px;font-size:14px;background:#fff;color:#1e293b;outline:none;transition:border .15s}
+.inp:focus{border-color:#1d7a46}
+
+/* اسم الشركة في رأس صفحات الطباعة */
+.inv-brand-name{font-size:16px;font-weight:800;color:#123a5c;margin-bottom:4px}
+
+/* ===== لوحة إدارة المالك ===== */
+#viewAdmin .tbl-wrap{overflow-x:auto}
+#viewAdmin table.data-table{width:100%;border-collapse:collapse;font-size:13px;min-width:820px}
+#viewAdmin table.data-table th{background:#f1f5f9;padding:8px;text-align:right;border-bottom:2px solid #cbd5e0;white-space:nowrap}
+#viewAdmin table.data-table td{padding:6px 8px;border-bottom:1px solid #e2e8f0;vertical-align:middle;white-space:nowrap}
+#viewAdmin .inp.small{width:auto;padding:6px 8px;font-size:13px}
+.badge-ok{color:#1d7a46;font-weight:700}
+.badge-no{color:#c0392b;font-weight:700}
+.badge-warn{color:#b45309;font-weight:700}
+#viewAdmin .kpi-row{grid-template-columns:repeat(7,1fr);gap:6px;margin:2px 0 10px}
+#viewAdmin .kpi-mini{min-height:52px;padding:6px 8px;border-right-width:3px;justify-content:center;gap:2px}
+#viewAdmin .kpi-mini .kpi-title{font-size:11px}
+#viewAdmin .kpi-mini .kpi-value{font-size:16px}
+#viewAdmin .kpi-mini.clk{user-select:none;transition:transform .1s}
+#viewAdmin .kpi-mini.clk:hover{transform:translateY(-2px);box-shadow:0 4px 10px rgba(15,23,42,.12)}
+#adminAlerts{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.adm-alert{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;font-size:13px;font-weight:700;border:1px solid}
+.adm-alert.red{background:#fef2f2;color:#b91c1c;border-color:#fecaca}
+.adm-alert.orange{background:#fffbeb;color:#b45309;border-color:#fde68a}
+.adm-alert.green{background:#f0fdf4;color:#15803d;border-color:#bbf7d0}
+.adm-alert code{background:rgba(0,0,0,.06);padding:1px 6px;border-radius:5px;font-size:12px}
+.adm-search{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px dashed #cbd5e1}
+.adm-search-field{display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:700;color:var(--text-secondary)}
+.adm-search-field input{min-width:230px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px;background:#fff}
+.adm-search-field input:focus{outline:2px solid #93c5fd;outline-offset:1px;border-color:#2563eb}
+.adm-search .btn{padding:8px 14px}
+#admSearchInfo{font-weight:800;color:#1d4ed8;white-space:nowrap}
+@media (max-width:760px){.adm-search-field input{min-width:150px;flex:1}}
+@media (max-width:900px){#viewAdmin .kpi-row{grid-template-columns:repeat(4,1fr)}}
+@media (max-width:560px){#viewAdmin .kpi-row{grid-template-columns:repeat(2,1fr)}}
+.feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0;max-height:60vh;overflow:auto}
+.feat-line{display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid #e2e8f0;padding:7px 10px;border-radius:8px;cursor:pointer;font-size:13px}
+.feat-line input{accent-color:#1d7a46}
+.feat-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
+.modal-box{background:#fff;border-radius:12px;padding:20px;width:min(760px,94vw);box-shadow:0 20px 50px rgba(15,23,42,.35)}
+/* شاشة «بيانات الشركة» في لوحة الإدارة: أعرض عشان أزرار الإجراءات تفضل على سطر واحد */
+#orgModal .modal-box{width:min(1180px,97vw)}
+#omMembers td:last-child, #adminList td:last-child{white-space:nowrap}
+@media (max-width:640px){.feat-grid{grid-template-columns:1fr 1fr}}
+
+/* إخفاء عمود وخانات الضريبة عند تعطيلها */
+.c-tax.tax-hidden,
+th.c-tax.tax-hidden,
+td.c-tax.tax-hidden {
+  display: none !important;
+}
+
+/* ============================================================
+   شاشة الدخول — ثيم "داكن فاخر" (Dark Premium)
+   محصور في #loginScreen فقط حتى لا يؤثر على الشاشات الأخرى
+   التي تستخدم .login-screen/.login-box (إنشاء الشركة / حسابات
+   الشركة / لا يمكنك الدخول).
+   ============================================================ */
+#loginScreen{
+  background: radial-gradient(circle at 50% 0%, #14342a, #0a1a15 70%);
+}
+#loginScreen, #loginScreen .login-box, #loginScreen input,
+#loginScreen button, #loginScreen h2, #loginScreen p, #loginScreen label{
+  font-family: "Cairo", "Segoe UI", Tahoma, Arial, sans-serif;
+}
+#loginScreen .login-box{
+  background:#0f1c17;
+  border:1px solid rgba(212,175,55,.28);
+  border-radius:20px;
+  padding:34px 30px;
+  max-width:420px;
+  box-shadow:0 24px 70px rgba(0,0,0,.6), inset 0 0 0 1px rgba(212,175,55,.06);
+}
+#loginScreen .login-logo{ filter:drop-shadow(0 4px 14px rgba(212,175,55,.45)); }
+#loginScreen .login-box h2{ color:#f4e9c8; }
+#loginScreen .login-tabs{ gap:8px; }
+#loginScreen .ltab{
+  background:#0a1512; border:1px solid #244034; color:#9fb3a8;
+  border-radius:10px; font-weight:700;
+}
+#loginScreen .ltab.active{
+  background:linear-gradient(135deg,#d4af37,#b8912c); border-color:#d4af37; color:#1a1405;
+}
+#loginScreen .filter-label{ color:#cdd9d1; font-weight:700; }
+#loginScreen .inp{
+  background:#0a1512; border:1px solid #244034; color:#eaf2ee; border-radius:10px;
+}
+#loginScreen .inp::placeholder{ color:#5f7268; }
+#loginScreen .inp:focus{ border-color:#d4af37; box-shadow:0 0 0 3px rgba(212,175,55,.15); }
+#loginScreen .pw-eye{ color:#9fb3a8; opacity:.85; }
+#loginScreen .pw-eye:hover{ opacity:1; }
+#loginScreen .btn.green.full{
+  background:linear-gradient(135deg,#d4af37,#c79a2e); color:#1a1405; border:none;
+  box-shadow:0 10px 26px rgba(212,175,55,.28); font-weight:800;
+}
+#loginScreen .btn.green.full:hover{ background:linear-gradient(135deg,#e2c04a,#d4af37); }
+#loginScreen .login-msg{ color:#9fb3a8; }
+#loginScreen .login-msg.err{ color:#e08b7a; }
+#loginScreen .login-msg.ok{ color:#7ef0b4; }
+#loginScreen #btnWipe{
+  background:#1b2b23 !important; color:#9fb3a8 !important; border:1px solid #244034;
+}
+#loginScreen #btnWipe:hover{ background:#22352c !important; }
+
+/* زرار «تنزيل أيقونة البرنامج على الجهاز» (تثبيت PWA) */
+#loginScreen .btn.install-app{
+  margin-top:10px;
+  background:transparent;
+  color:#d4af37;
+  border:1px solid rgba(212,175,55,.45);
+  border-radius:10px;
+  font-weight:700;
+  font-size:13px;
+  padding:9px 12px;
+  transition:background .15s ease, color .15s ease, border-color .15s ease;
+}
+#loginScreen .btn.install-app:hover{
+  background:rgba(212,175,55,.12);
+  border-color:#d4af37;
+  color:#f4e9c8;
+}
+#loginScreen .btn.install-app[hidden]{ display:none; }
+
+/* شاشات قصيرة (لاب توب صغير): نضغط المسافات عشان المحتوى يقعد من غير قص */
+@media (max-height:760px){
+  #loginScreen{ padding:10px; }
+  #loginScreen .login-box{ padding:20px 22px; }
+  #loginScreen .login-logo{ font-size:36px; margin-bottom:2px; }
+  #loginScreen .login-box h2{ font-size:19px; }
+  #loginScreen .login-sub{ margin-bottom:10px; font-size:12px; }
+  #loginScreen .login-tabs{ margin-bottom:10px; }
+  #loginScreen .inp{ margin-bottom:8px; }
+  #loginScreen .btn.install-app{ margin-top:8px; padding:8px 10px; }
+}
+
+/* ============================================================
+   لوحة الاشتراكات — تنسيق ذهبي احترافي (build 104)
+   محصور في #adminSubs فقط حتى لا يؤثر على بقية لوحة المالك
+   ============================================================ */
+#adminSubs.subs-gold{
+  border:1.5px solid rgba(212,175,55,.6);
+  border-radius:16px;
+  background:linear-gradient(160deg,#fffdf4 0%,#ffffff 40%,#fdf8e7 100%);
+  box-shadow:0 10px 30px rgba(184,145,44,.12);
+  padding:18px 20px;
+}
+#adminSubs.subs-gold > .panel-title{
+  color:#8a6d1c;
+  font-size:17px;
+  font-weight:900;
+  border-bottom:2px solid rgba(212,175,55,.5);
+  padding-bottom:8px;
+  margin-bottom:8px;
+  text-shadow:0 1px 0 rgba(255,255,255,.8);
+}
+#adminSubs .subs-gold-title-ico{ color:#d4af37; }
+#subsCfgStatus{ margin:2px 0 10px; font-size:13px; font-weight:700; }
+#subsCfgStatus.ok{ color:#15803d; }
+#subsCfgStatus.warn{ color:#b45309; }
+#subsCfgStatus .btn{ margin-right:8px; }
+
+/* كروت الباقات الذهبية */
+#adminSubsPlans{ display:flex; flex-wrap:wrap; gap:12px; margin-bottom:14px; }
+#adminSubsPlans .kpi-card{
+  flex:1 1 180px;
+  min-height:0;
+  background:linear-gradient(150deg,#fffef9,#fdf6df);
+  border:1.5px solid #d4af37;
+  border-right:1.5px solid #d4af37;
+  border-radius:14px;
+  padding:12px 14px;
+  box-shadow:0 4px 14px rgba(184,145,44,.15);
+  transition:transform .12s ease, box-shadow .12s ease;
+  text-align:center;
+}
+#adminSubsPlans .kpi-card:hover{
+  transform:translateY(-3px);
+  box-shadow:0 10px 24px rgba(184,145,44,.25);
+}
+#adminSubsPlans .subs-plan-name{
+  color:#8a6d1c; font-weight:900; font-size:14px; margin-bottom:2px;
+}
+#adminSubsPlans .subs-plan-price-row{
+  display:flex; align-items:center; justify-content:center; gap:6px; margin:4px 0;
+}
+#adminSubsPlans .cfg-price{
+  width:110px; text-align:center; font-size:18px; font-weight:900;
+  color:#8a6d1c; background:#fff;
+  border:1.5px solid #d4af37; border-radius:9px; padding:5px 8px;
+}
+#adminSubsPlans .cfg-price:focus{
+  outline:none; border-color:#b8912c; box-shadow:0 0 0 3px rgba(212,175,55,.22);
+}
+#adminSubsPlans .subs-plan-cur{ color:#8a6d1c; font-weight:800; font-size:13px; }
+#adminSubsPlans .subs-plan-note{ color:#a08b3a; font-size:11.5px; font-weight:700; }
+#btnSavePlansCfg, #btnSubsExport{
+  background:linear-gradient(135deg,#d4af37,#b8912c);
+  color:#fffdf4; border:none; font-weight:800; border-radius:10px; padding:8px 16px;
+  box-shadow:0 6px 16px rgba(184,145,44,.3); font-size:13px; cursor:pointer;
+}
+#btnSavePlansCfg:hover, #btnSubsExport:hover{ background:linear-gradient(135deg,#e2c04a,#c79a2e); }
+
+/* جدول الشركات في اللوحة الذهبية */
+#adminSubsList table.data-table{
+  width:100%; border-collapse:separate; border-spacing:0; font-size:13px; min-width:900px;
+}
+#adminSubsList thead th{
+  background:linear-gradient(135deg,#f7ecc6,#efdc9a);
+  color:#6b5410; font-weight:900; padding:9px 8px; text-align:right;
+  border-bottom:2px solid #d4af37; white-space:nowrap;
+}
+#adminSubsList tbody tr:nth-child(even){ background:rgba(212,175,55,.055); }
+#adminSubsList tbody tr:hover{ background:rgba(212,175,55,.12); }
+#adminSubsList td{ padding:7px 8px; border-bottom:1px solid rgba(212,175,55,.25); vertical-align:middle; white-space:nowrap; }
+#adminSubsList .inp{ border:1px solid rgba(184,145,44,.45); border-radius:8px; }
+#adminSubsList .inp:focus{ border-color:#d4af37; box-shadow:0 0 0 3px rgba(212,175,55,.18); }
+#adminSubsList .subs-plan{ min-width:150px; font-weight:700; color:#6b5410; }
+/* سطر التوضيح تحت تاريخ البداية: بيقول فترة التجديد هتبدأ منين ولما */
+#adminSubsList .subs-note{ font-size:11px; font-weight:700; color:#a08b3a; margin-top:2px; }
+#adminSubsList button.subs-go:disabled{ opacity:.45; cursor:not-allowed; }
+#adminSubsList .subs-price{ width:120px; text-align:center; font-weight:800; color:#8a6d1c; }
+#adminSubsList .subs-amt{ font-weight:900; color:#b8912c; }
+/* 🔎 صندوق بحث جدول الاشتراكات (اسم الشركة أو المسئول أو رقم التليفون — بنفس تطبيع لوحة الإدارة) */
+#adminSubs .subs-search-wrap{ text-align:center; margin:6px 0 10px; }
+#subsSearch{ max-width:340px; text-align:center; font-weight:700; color:#6b5410; }
+#subsSearch::placeholder{ color:#a08b3a; font-weight:700; }
+#subsSearchCount{ display:block; margin-top:4px; font-weight:800; color:#8a6d1c; }
+#adminSubsList tr[data-locked="1"] td:first-child{ border-right:3px solid #c0392b; padding-right:10px; }
+
+
+/* ===== شاشة مستندات العملاء/الموردين الاحترافية — build 106 ===== */
+#mDocsBox .docs-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; background:linear-gradient(135deg,#0e7a6d,#14907f); color:#fff; padding:14px 18px; border-radius:14px 14px 0 0; margin:-20px -20px 14px; box-shadow:0 2px 10px rgba(14,122,109,.25); }
+#mDocsBox .docs-head h3{ margin:0; font-size:18px; }
+#mDocsBox .docs-stats{ display:flex; gap:8px; flex-wrap:wrap; }
+#mDocsBox .dstat{ background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.32); color:#fff; font-size:12.5px; font-weight:700; padding:5px 11px; border-radius:999px; white-space:nowrap; }
+#mDocsBox .docs-folder{ margin:0 0 10px; font-size:12.5px; color:#0e7a6d; background:#eefaf7; border:1px dashed #9fd8cf; border-radius:8px; padding:7px 11px; overflow-wrap:anywhere; }
+#mDocsBox .docs-wrap{ max-height:46vh; overflow:auto; border:1px solid #e3e8ee; border-radius:10px; }
+#mDocsBox .docs-table{ width:100%; border-collapse:collapse; }
+#mDocsBox .docs-table thead th{ position:sticky; top:0; background:#f2f7f6; color:#0e554c; font-size:12.5px; padding:9px 10px; border-bottom:2px solid #d7e5e2; z-index:1; }
+#mDocsBox .docs-table td{ padding:9px 10px; font-size:13px; border-bottom:1px solid #eef2f5; vertical-align:top; }
+#mDocsBox .docs-table tbody tr:nth-child(even){ background:#f8fbfa; }
+#mDocsBox .docs-table tbody tr:hover{ background:#eefaf7; }
+#mDocsBox .doc-ico{ display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:9px; background:#e8f4f2; font-size:17px; margin-inline-end:8px; vertical-align:middle; }
+#mDocsBox .doc-path{ margin:2px 0 0; font-size:11px; color:#7c8794; direction:ltr; text-align:right; overflow-wrap:anywhere; }
+#mDocsBox .docs-foot{ margin:10px 0 0; font-size:11.5px; color:#7c8794; }
+#mDocsBox .docs-search{ width:100%; box-sizing:border-box; margin:0 0 10px; border:1.5px solid #cfe3df; border-radius:10px; padding:9px 12px; font-size:13.5px; background:#fbfefe; }
+#mDocsBox .docs-search:focus{ outline:none; border-color:#14907f; box-shadow:0 0 0 3px rgba(20,144,127,.12); }
+
+/* ===================== build 107 — ربط الفولدر + شاشة معاينة المستند ===================== */
+#mDocViewBox .docs-head{ margin:-18px -18px 12px; padding:14px 18px; background:linear-gradient(135deg,#0e7a6d,#14907f); border-radius:14px 14px 0 0; color:#fff; }
+#mDocViewBox .docs-head h3{ margin:0 0 6px; font-size:16.5px; color:#fff; }
+#mDocViewBox .docs-stats{ display:flex; gap:8px; flex-wrap:wrap; }
+#mDocViewBox .dstat{ background:rgba(255,255,255,.18); color:#fff; border:1px solid rgba(255,255,255,.32); font-size:11.5px; padding:3px 10px; border-radius:999px; }
+#mDocViewBox .docs-view{ max-height:58vh; min-height:120px; overflow:auto; border:1px solid #e3e8ee; border-radius:12px; background:#f7faf9; display:flex; align-items:center; justify-content:center; padding:10px; }
+#mDocViewBox .docs-view img{ max-width:100%; max-height:56vh; border-radius:8px; background:#fff; box-shadow:0 2px 10px rgba(0,0,0,.12); }
+#mDocViewBox .docs-view iframe{ width:100%; height:56vh; min-height:340px; border:0; background:#fff; border-radius:8px; }
+#mDocViewBox .docs-no-preview{ text-align:center; padding:26px 12px; color:#4a5560; }
+#mDocViewBox .docs-no-preview .dnp-ico{ font-size:52px; margin-bottom:10px; }
+#mDocViewBox .docs-no-preview p{ margin:0; font-size:13.5px; }
+#docRootBox .btn.small{ margin-inline-end:6px; }
+
+/* ============ build 107 — شاشة المستندات تتمدد مع زيادة عدد المستندات ============ */
+#mDocsBox{ width:min(940px,96vw); min-width:min(520px,96vw); max-height:94vh; display:flex; flex-direction:column; }
+#mDocsBox .docs-head,#mDocsBox .docs-folder,#mDocsBox .docs-search,#mDocsBox .docs-foot,#mDocsBox .feat-btns{ flex:0 0 auto; }
+#mDocsBox .docs-wrap{ flex:1 1 auto; min-height:200px; max-height:none; }
+#mDocsBox .docs-table tbody tr{ height:auto; }
+@media (max-height:760px){ #mDocsBox{ max-height:96vh; } #mDocsBox .docs-view,#mDocsBox .docs-wrap{ min-height:150px; } }
+#mDocViewBox{ width:min(940px,96vw); min-width:min(520px,96vw); max-height:94vh; display:flex; flex-direction:column; }
+#mDocViewBox .docs-view{ flex:1 1 auto; max-height:none; min-height:220px; }
+
+/* ====== build 107 — استغلال أفضل للعرض: أعمدة مضبوطة وصفوف أكتر في الشاشة ====== */
+#mDocsBox .docs-table col.c-doc{ width:38%; } #mDocsBox .docs-table col.c-type{ width:12%; }
+#mDocsBox .docs-table col.c-size{ width:10%; } #mDocsBox .docs-table col.c-date{ width:14%; }
+#mDocsBox .docs-table col.c-by{ width:11%; } #mDocsBox .docs-table col.c-act{ width:15%; }
+#mDocsBox .docs-table td{ padding:6px 8px; font-size:12.5px; }
+#mDocsBox .docs-table thead th{ padding:7px 8px; font-size:12px; }
+#mDocsBox .docs-table td.nowrap{ white-space:nowrap; }
+#mDocsBox .doc-ico{ width:28px; height:28px; font-size:15px; border-radius:8px; }
+#mDocsBox .doc-path{ font-size:10.5px; line-height:1.35; }
+#mDocsBox .docs-table b{ font-size:12.5px; }
+#mDocsBox .btn.small{ padding:4px 9px; font-size:11.5px; }
+#mDocsBox .docs-head{ padding:12px 16px; } #mDocsBox .docs-head h3{ font-size:15.5px; margin-bottom:5px; }
+#mDocsBox .docs-search{ padding:7px 11px; font-size:13px; margin-bottom:8px; }
+#mDocsBox .docs-folder{ padding:6px 10px; font-size:12px; }
+#mDocsBox .docs-foot{ font-size:11px; }
+
+/* ====== build 107 — صفوف مستندات من سطر واحد واستغلال كامل للارتفاع ====== */
+#mDocsBox .docs-table{ table-layout:fixed; width:100%; }
+#mDocsBox .docs-table col.c-doc{ width:37%; } #mDocsBox .docs-table col.c-type{ width:13%; }
+#mDocsBox .docs-table col.c-size{ width:9%; } #mDocsBox .docs-table col.c-date{ width:13%; }
+#mDocsBox .docs-table col.c-by{ width:11%; } #mDocsBox .docs-table col.c-act{ width:17%; }
+#mDocsBox .docs-table td,#mDocsBox .docs-table th{ overflow:hidden; text-overflow:ellipsis; }
+#mDocsBox .docs-table td{ white-space:nowrap; }
+#mDocsBox .doc-path{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#mDocsBox .docs-table td:first-child b{ display:inline-block; max-width:calc(100% - 36px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:middle; }
+#mDocsBox .docs-wrap{ overflow-x:hidden; }
+#mDocsBox .docs-table td:last-child{ text-align:center; }
+@media (max-width:900px){
+  /* نافذة ضيقة: الجدول يفضل كامل من غير قص + شريط تمرير أفقي داخل الصندوق فقط */
+  #mDocsBox .docs-table{ min-width:800px; }
+  #mDocsBox .docs-wrap{ overflow-x:auto; }
+}
+/* ====== build 107 — كثافة أعلى: مستندات أكتر في نفس الشاشة ====== */
+#mDocsBox .docs-table td{ padding:4px 8px; line-height:1.3; vertical-align:middle; }
+#mDocsBox .docs-table thead th{ padding:6px 8px; }
+#mDocsBox .doc-ico{ width:22px; height:22px; font-size:12px; border-radius:6px; margin-inline-end:6px; }
+#mDocsBox .doc-path{ font-size:9.8px; line-height:1.25; margin:0; }
+#mDocsBox .docs-table td:last-child .btn.small{ padding:2px 7px; font-size:10.8px; }
+#mDocsBox .docs-folder{ padding:4px 9px; margin:0 0 6px; }
+#mDocsBox .docs-search{ margin-bottom:6px; padding:6px 10px; }
+#mDocsBox .docs-foot{ margin:6px 0 0; }
+#mDocsBox .feat-btns{ margin-top:6px; }
+#mDocsBox .docs-head{ padding:10px 14px; }
+
+/* ====== build 107 — اتجاه الأرقام/الاسم داخل جدول المستندات ====== */
+#mDocsBox .docs-table td:first-child b{ direction:ltr; text-align:right; unicode-bidi:isolate; }
+#mDocsBox .docs-table td.nowrap{ direction:ltr; text-align:center; }
+#mDocsBox .docs-table td:last-child{ direction:rtl; }
+
+@media (max-width:760px){ #mDocsBox .docs-table td:last-child .btn.small{ padding:2px 5px; font-size:10px; } #mDocsBox .doc-path{ font-size:9.2px; } }
+
+/* ====== build 108 — المرتجعات 🔁 ====== */
+/* وسم «تم استرجاعه بتاريخ…» قدام الصنف في الفاتورة الأصلية */
+.ret-tag {
+  display: inline-block;
+  margin-inline-start: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #FEF3C7;
+  color: #92400E;
+  border: 1px solid #FCD34D;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: normal;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.ret-tag-done { background: #DCFCE7; color: #166534; border-color: #86EFAC; }
+.ret-muted { color: var(--text-muted); font-size: 11px; }
+.ret-settle {
+  display: inline-block;
+  margin-inline-end: 4px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: var(--sel-bg);
+  color: var(--sel-fg);
+  font-size: 10.8px;
+  font-weight: 700;
+}
+.ret-items-cell { text-align: right; white-space: normal; font-size: 11.4px; }
+#viewReturnsReg .dgv td, #viewReturnsReg .dgv th { vertical-align: middle; }
+#viewReturnsReg .view-actions { flex-wrap: wrap; gap: 6px; }
+/* أزرار تبويبات المرتجعات (كلاس مستقل عشان ما ياخدوش handler التبويبات العامة) */
+.ret-tab-btn {
+  padding: 7px 16px;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 9px 9px 0 0;
+  background: #fff;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 12.6px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ret-tab-btn + .ret-tab-btn { margin-inline-start: 4px; }
+.ret-tab-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* جدول أصناف المرتجع داخل النافذة */
+#mRetAddBox .ret-items-wrap { max-height: 46vh; overflow-y: auto; border: 1px solid var(--border); border-radius: 9px; }
+#mRetAddBox .ret-qty-inp {
+  width: 82px;
+  padding: 4px 7px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-family: inherit;
+  font-size: 12.5px;
+  text-align: center;
+  direction: ltr;
+}
+#mRetAddBox .ret-qty-inp:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+#mRetAddBox .ret-total {
+  margin-inline-end: auto;
+  font-weight: 800;
+  color: var(--primary-dark);
+  font-size: 13px;
+}
+#mRetAddBox .ret-hint { margin: 2px 0 8px; font-size: 11.4px; color: var(--text-secondary); }
+/* بناء 113: تحذير الكمية المرتجعة الأكبر من المتبقي من الفاتورة */
+#mRetAddBox .ret-over-warn {
+  margin: 4px 0 10px;
+  padding: 9px 12px;
+  border: 1.5px solid #E4A11B;
+  border-radius: 9px;
+  background: #FFF7E6;
+  color: #8A5300;
+  font-size: 12.3px;
+  font-weight: 700;
+  line-height: 1.75;
+}
+#mRetAddBox #dgvRetItems tr.ret-over { background: #FDECEA; }
+#mRetAddBox #dgvRetItems tr.ret-over td { color: #B00020; }
+#mRetAddBox .ret-qty-inp.ret-over-inp {
+  border-color: #D93025;
+  background: #FFF5F5;
+  color: #B00020;
+  font-weight: 800;
+}
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+#mRetAddBox input[readonly] { background: #F8FAFC; color: var(--text-secondary); font-weight: 700; }
+#mRetPickBox .dgv td { white-space: nowrap; }
+
+/* ===== بناء 172: صندوق تسوية المرتجع (مبلغ خزينة + باقي على حساب الطرف) ===== */
+#mRetAddBox .ret-settle {
+  border: 1.5px solid var(--border);
+  border-radius: 11px;
+  background: #F8FAFC;
+  padding: 10px 12px;
+  margin: 4px 0 10px;
+}
+#mRetAddBox .ret-settle-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+#mRetAddBox .ret-settle-title { font-weight: 800; color: var(--primary-dark); font-size: 13.5px; }
+#mRetAddBox .ret-settle-total { font-size: 12.6px; color: var(--text-secondary); font-weight: 700; }
+#mRetAddBox .ret-settle-total b { color: var(--primary-dark); font-size: 13.5px; }
+#mRetAddBox .ret-settle-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+#mRetAddBox .ret-preset {
+  padding: 5px 11px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 12.2px;
+  font-weight: 700;
+  cursor: pointer;
+}
+#mRetAddBox .ret-preset:hover { border-color: var(--sidebar-active); color: var(--primary-dark); }
+#mRetAddBox .ret-preset.active { border-color: var(--accent); background: #EAF7F0; color: var(--primary-dark); }
+#mRetAddBox .ret-settle-cols { display: flex; gap: 14px; align-items: stretch; }
+#mRetAddBox .ret-settle-form { flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: 1fr 220px; gap: 8px 10px; align-items: center; }
+#mRetAddBox .ret-settle-form label { font-size: 12.6px; color: var(--text-secondary); }
+#mRetAddBox .ret-settle-side {
+  flex: 0 0 265px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: center;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 9px 11px;
+}
+#mRetAddBox .ret-side-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12.4px; color: var(--text-secondary); }
+#mRetAddBox .ret-side-row b { color: var(--primary-dark); font-size: 13px; }
+#mRetAddBox .ret-side-cur { font-size: 11px; color: var(--text-muted); }
+#mRetAddBox .ret-side-after { border-top: 1px dashed var(--border); padding-top: 6px; }
+#mRetAddBox .ret-side-after b { color: var(--accent-dark, #0F766E); }
+#mRetAddBox #retCashAmount { direction: ltr; text-align: center; font-weight: 800; }
+@media (max-width: 760px) {
+  #mRetAddBox .ret-settle-cols { flex-direction: column; }
+  #mRetAddBox .ret-settle-side { flex-basis: auto; }
+  #mRetAddBox .ret-settle-form { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  #mRetAddBox .ret-qty-inp { width: 68px; }
+  .ret-tag { font-size: 9.8px; padding: 1px 5px; }
+}
+
+/* ===== صناديق «على الفاتورة» في تبويب بيانات المنشأة (بناء ١١٠) ===== */
+.invf-hint {
+  font-size: 12px;
+  color: #475569;
+  background: #F8FAFC;
+  border: 1px dashed #CBD5E1;
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin: 6px 0 10px;
+}
+.invf-cell { display: flex; gap: 8px; align-items: center; }
+.invf-cell input[type="text"] { flex: 1; min-width: 0; }
+.invf-chk {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: bold;
+  color: #123a5c;
+  background: #EEF4FB;
+  border: 1px solid #CBD5E1;
+  border-radius: 6px;
+  padding: 5px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.invf-chk input { width: 15px; height: 15px; accent-color: #123a5c; cursor: pointer; }
+@media (max-width: 860px) { .invf-cell { flex-wrap: wrap; } }
+
+/* ===== فاتورة احترافية للطباعة — بيع وشراء (بناء ١١٠) ===== */
+@media print {
+  .inv-page { direction: rtl; color: #0F172A; font-size: 12px; }
+  .inv-head {
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+    border-bottom: 2px solid #123a5c; padding-bottom: 10px; margin-bottom: 12px;
+  }
+  .inv-org-name { font-size: 20px; font-weight: 800; color: #123a5c; margin-bottom: 2px; }
+  .inv-org-line { font-size: 12px; color: #334155; margin-top: 3px; }
+  .inv-doc { text-align: left; min-width: 190px; }
+  .inv-doctype {
+    font-size: 15px; font-weight: 800; color: #0F172A; background: #F1F5F9;
+    border: 1px solid #CBD5E1; border-radius: 6px; padding: 5px 12px; margin-bottom: 6px;
+  }
+  .inv-meta-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; margin-top: 3px; }
+  .inv-meta-row span { color: #64748B; }
+  .inv-meta-row b { direction: ltr; }
+  .inv-parties { display: flex; gap: 10px; margin-bottom: 12px; }
+  .inv-party { flex: 1; border: 1px solid #CBD5E1; border-radius: 6px; padding: 6px 9px; background: #fff; }
+  .inv-party span { display: block; font-size: 10px; color: #64748B; margin-bottom: 2px; }
+  .inv-party b { font-size: 13px; }
+  .inv-table th { background: #123a5c; color: #fff; border-color: #123a5c; }
+  .inv-table td { font-size: 11.5px; }
+  .inv-table tr:nth-child(even) td { background: #F8FAFC; }
+  .inv-bottom { display: flex; gap: 16px; margin-top: 12px; align-items: flex-start; }
+  .inv-notes { flex: 2; font-size: 11px; color: #334155; }
+  .inv-notes p { margin: 2px 0; }
+  .inv-notes .inv-notes-title { font-weight: 800; color: #123a5c; }
+  .inv-totals { flex: 1; min-width: 215px; border: 1px solid #CBD5E1; border-radius: 6px; overflow: hidden; }
+  .inv-total-row { display: flex; justify-content: space-between; padding: 5px 10px; border-bottom: 1px solid #E2E8F0; font-size: 12px; font-weight: bold; }
+  .inv-total-row span { color: #475569; font-weight: normal; }
+  .inv-total-row.grand { background: #123a5c; color: #fff; border-bottom: none; font-size: 13px; }
+  .inv-total-row.grand span { color: #DBEAFE; }
+  .inv-sign { display: flex; gap: 24px; margin-top: 22px; }
+  .inv-sign-box { flex: 1; border-top: 1px dashed #94A3B8; padding-top: 5px; font-size: 11px; color: #475569; text-align: center; }
+  .inv-empty { color: #94A3B8; font-size: 11px; }
+
+  /* أحجام الورق من الضبط (A4 / A5 / حراري 80mm) */
+  .paper-a5 { max-width: 148mm; margin: 0 auto; }
+  .paper-a5 .inv-org-name { font-size: 17px; }
+  .paper-a5 .inv-totals { min-width: 150px; }
+  .paper-thermal { max-width: 76mm; margin: 0 auto; font-size: 11px; }
+  .paper-thermal .inv-head { flex-direction: column; gap: 8px; }
+  .paper-thermal .inv-doc { text-align: right; min-width: 0; }
+  .paper-thermal .inv-parties { flex-direction: column; gap: 6px; }
+  .paper-thermal .inv-bottom { flex-direction: column; gap: 10px; }
+  .paper-thermal .inv-totals { min-width: 0; width: 100%; }
+  .paper-thermal .inv-sign { flex-direction: column; gap: 16px; }
+  .paper-thermal .inv-table th, .paper-thermal .inv-table td { padding: 3px; font-size: 10px; }
+}
+
+/* ===== رسالة «انتهت فترة اشتراكك» على شاشة تسجيل الدخول (بناء ١١٠) ===== */
+.login-expiry {
+  margin-top: 12px;
+  padding: 12px 14px;
+  text-align: center;
+  background: #FFF7ED;
+  border: 1px solid #FDBA74;
+  border-radius: 12px;
+}
+.login-expiry-ico { font-size: 22px; line-height: 1; margin-bottom: 6px; }
+.login-expiry-text {
+  font-size: 14px;
+  font-weight: 800;
+  color: #9A3412;
+  line-height: 1.7;
+}
+.login-expiry-wa {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: #25D366;
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  text-decoration: none;
+}
+.login-expiry-wa:hover { background: #1EBE5B; }
+.login-expiry-wa b { direction: ltr; }
+
+/* ================== 🆕 بناء 115: الحضور والانصراف ================== */
+/* حالات الحضور — نفس لوحة الألوان الحالية (نفس درجات kpi-card) */
+.att-badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .85rem; font-weight: 700; white-space: nowrap; }
+.att-present { background: #dcfce7; color: #166534; }
+.att-absent  { background: #fee2e2; color: #991b1b; }
+.att-late    { background: #fef3c7; color: #92400e; }
+.att-mission { background: #dbeafe; color: #1e40af; }
+.att-leave   { background: #e9d5ff; color: #6b21a8; }
+.att-permit  { background: #cffafe; color: #155e75; }
+.att-holiday { background: #f1f5f9; color: #334155; }
+.att-now { color: #0e7490; font-weight: 700; }
+.att-stopped { color: #9ca3af; font-weight: 700; }
+#attTabs { margin: 6px 0 10px; }
+.att-ot { color: #7c3aed; font-weight: 700; }
+.att-late-n { color: #b45309; font-weight: 700; }
+.att-early-n { color: #be123c; font-weight: 700; }
+@media print {
+  #attTabs, .view-attendance .view-actions, .view-attendance .search-bar { display: none !important; }
+}
+
+
+
+
+/* ============ 🛡 بناء 124: لافتة حالة قوائم الضبط (وحدات/تصنيفات/مستودعات…) ============
+ * التوست بيختفي بعد ثواني، فالحالة المهمة (تعديلات لسه ما اترفعتش / تحميل فشل)
+ * بتعيش في لافتة ثابتة لحد ما تتحل. الألوان من متغيرات الثيم نفسها — بلا أي hex جديد. */
+.sett-notice{
+  margin:10px 0; padding:10px 12px; border-radius:10px;
+  font-size:13px; font-weight:700; line-height:1.7;
+  border:1px solid var(--border); background:var(--bg);
+  color:var(--text-primary);
+}
+.sett-notice.warn{ border-color:var(--warning); background:rgba(245,158,11,.12); }
+.sett-notice.err{ border-color:var(--danger); background:rgba(239,68,68,.1); }
+.sett-notice .btn{ margin-inline-start:6px; }
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * 🔳 بناء 139 — باركود الأصناف (توليد + معاينة + طباعة ملصقات)
+ * الكود CODE-128 بيتولد في app.js وبيرسم SVG نقي (مستطيل لكل مجموعة «1»)
+ * ⇒ حاد على أي مقاس ورق. مافيش مكتبة خارجية، ومافيش صورة.
+ * الألوان من متغيرات الثيم (ممنوع hex جديد).
+ * ═══════════════════════════════════════════════════════════════════════ */
+.bc-field { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.bc-field input { flex: 1 1 auto; min-width: 0; direction: ltr; text-align: left; }
+.bc-preview-row { grid-column: 1 / -1; }
+.bc-preview {
+  min-height: 44px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; padding: 7px 8px;
+  border: 1px dashed var(--border); border-radius: 10px; background: #fff;
+  overflow-x: auto;
+}
+.bc-preview .bc-svg { display: block; max-width: 100%; }
+.bc-preview-empty { font-size: 12px; color: var(--text-secondary); }
+.bc-none { font-size: 12px; color: var(--danger); font-weight: 700; }
+/* السطر المقروء تحت الخطوط: أرقام إنجليزي دايمًا، والـ SVG ما بيتلمسش */
+.bc-hrt {
+  font-family: "Courier New", monospace; font-size: 12px; font-weight: 700;
+  letter-spacing: 1.5px; direction: ltr; unicode-bidi: isolate; text-align: center;
+}
+.cell-barcode { direction: ltr; text-align: center; font-family: "Courier New", monospace; font-size: 12px; }
+.cell-barcode .bc-missing { color: var(--text-secondary); font-family: inherit; font-size: 12px; }
+
+/* نافذة الطباعة */
+.bc-print-name { font-size: 15px; font-weight: 800; color: var(--text-primary); text-align: center; }
+.bc-print-meta { font-size: 12px; color: var(--text-secondary); text-align: center; margin-bottom: 8px; }
+.bc-print-preview {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 10px; margin-bottom: 8px;
+  border: 1px solid var(--border); border-radius: 10px; background: #fff;
+  overflow-x: auto;
+}
+.bc-print-preview .bc-svg { display: block; max-width: 100%; }
+.bc-print-code { font-size: 12px; color: var(--text-secondary); text-align: center; margin-bottom: 10px; }
+.bc-print-code b { direction: ltr; unicode-bidi: isolate; font-family: "Courier New", monospace; }
+
+/* ملصق الباركود — بيظهر في ورق الطباعة بس */
+.bc-labels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+/* 🔳 142 — كل الألوان من متغيرات الثيم (ممنوع hex هنا). القيم الأصلية كانت
+   رمادي مطفي / رمادي متوسط / كحلي غامق، واتبدلت بالمتغيرات بنفس القيمة حرفيًا:
+   `--text-muted` · `--text-secondary` · `--text-primary`. لون سطر اسم الشركة بقى
+   `--text-primary` لأنه مالوش متغيّر نصّي مقابل، والفرق «أغمق شوية» على الملصق
+   (قرارة عين الإسكانر والطابعة). الأبيض تحت الملصق والمعاينة سِبناه `#fff`:
+   الباركود لازم يكون أبيض تحته. */
+.bc-label {
+  border: 1px dashed var(--text-muted); border-radius: 6px; padding: 6px 4px;
+  text-align: center; break-inside: avoid; page-break-inside: avoid; background: #fff;
+}
+.bc-label .bc-org { font-size: 10px; font-weight: 700; color: var(--text-primary); }
+.bc-label .bc-name { font-size: 12px; font-weight: 800; color: var(--text-primary); margin-top: 2px; }
+.bc-label .bc-meta { font-size: 9.5px; color: var(--text-secondary); margin-bottom: 3px; }
+.bc-label .bc-bars { line-height: 0; }
+.bc-label .bc-svg { display: block; margin: 0 auto; }
+.bc-label .bc-hrt { font-size: 10px; letter-spacing: 1px; margin-top: 2px; }
+
+/* ═══════════════ 📷 بناء 143 — شريط نتيجة المسح الضوئي ═══════════════
+   بيظهر تحت صفّ الفاتورة (البيع والشراء) وتحت خانة الباركود في نافذة الصنف،
+   وبيقول بالعربي الودّي: قريت الصنف / ملقتش / مكرر / موقوف / متوفر قد إيه.
+   الألوان من متغيرات الثيم وحدها (درس 142: حارس التباين بيسكن النصوص من
+   حارس التباين وممنوع أي hex غير الأبيض)، وممنوع أي قاعدة غالبة تجبر
+   الترتيب — `[hidden]` لازم يقهر الكلاس بنفسه عشان الشريط يختفي فعلًا.
+   `.fld-code` اتوسّعت (95px → 150px) لأن الليبل بقى «📷 باركود / كود:»
+   وفيه placeholder — من غير التوسعة الرقم الممسوح كان بينقص بصريًا. */
+.fld-code { width: 150px; }
+.scan-hint {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 700; line-height: 1.55;
+  color: var(--text-primary);
+  background: var(--bg);
+  border: 1px solid var(--border); border-radius: 10px;
+  padding: 6px 10px; margin: 6px 0 2px;
+}
+.scan-hint[hidden] { display: none; }
+/* 📇 بناء 228: السطر اللي الماسح عرفه في دليل العملاء/الموردين يلمع ثانيتين */
+.dgv tbody tr.scan-hit > td {
+  background: #FEF9C3;
+  box-shadow: inset 0 0 0 2px #EAB308;
+}
+.scan-hint.ok { border-color: var(--success); color: var(--success); background: #fff; }
+.scan-hint.warn { border-color: var(--warning); color: var(--text-primary); background: #fff; }
+.scan-hint.info { border-color: var(--info); color: var(--info); background: #fff; }
+/* السطر الثاني في رسالة المسح: إرشاد هادي مش أمر — بياخد عرض الشريط كله */
+.scan-hint .scan-sub {
+  flex: 1 0 100%; font-size: 11.5px; font-weight: 600;
+  color: var(--text-secondary);
+}
+/* 🔧 بناء 145 (طلب المالك 06/10 ≈23:45 — بحرفه: «بلاش تكتب دي … والسعر الإجمالي عايزه
+   واضح»): رسالة المسح بقت **أرقامًا** (سعر السطر + إجمالي الفاتورة) ⇒ الرقم بيتقاس من
+   `posRecalc`/`ppRecalc` وبيتعرض بخط أعرض وأصغر‑للاتجاه عشان «1,250.00» ما تركبش على
+   العربي. لون من المتغيرات بس (ممنوع أي رمز شباك هنا — حارس التباين بيمسكه). */
+.scan-hint .scan-line-total {
+  direction: ltr; unicode-bidi: isolate;
+  font-family: "Courier New", monospace; font-size: 13px; font-weight: 800;
+  color: var(--primary-dark);
+  padding: 0 2px;
+}
+/* الرقم الممسوح: إنجليزي دايمًا ومعزول لاتجاهًا، عشان «200000000815» ما تركبش على النص العربي */
+.scan-code {
+  direction: ltr; unicode-bidi: isolate;
+  font-family: "Courier New", monospace; font-size: 12px; letter-spacing: .5px;
+}
+.scan-act {
+  font: inherit; font-size: 11.5px; font-weight: 800;
+  color: var(--accent); background: #fff;
+  border: 1px solid var(--accent); border-radius: 999px;
+  padding: 2px 10px; cursor: pointer;
+}
+/* 📷 بناء 143 (طلب 05/10 ≈18:20) — أرقام «كمّللي الرقم» اللي بتظهر أثناء الكتابة اليدوية:
+   مجموعة أزرار تلف مع النص في نفس شريط الرسالة، والرقم نفسه لاتجاهه إنجليزي دايمًا. */
+.scan-hint .scan-picks { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.scan-picks .scan-act { direction: ltr; unicode-bidi: isolate; font-family: "Courier New", monospace; }
+/* 📷 بناء 144 (طلب المالك 06/10 بحرفه: «تنزل قائمه من الخانة بها الارقام اللى بتنتهى
+   بالرقم اللى انا كاتبه»): الكتابة اليدوية في خانة الباركود بتنزّل **قائمة تحت الخانة نفسها**،
+   مش رسالة في الشريط تحت الفاتورة (البعيد عن الإصبع في الموبايل). اللوحة مربوطة بحاويتها
+   `.fld-code` بـ `position: relative` فمستحيل تنزل تحت خانة تانية، ورقم كل صنف يفضل
+   لاتجاهه إنجليزي. الارتفاع سقفه ٦ أصناف (`SCAN_SUGGEST_MAX`) بس `max-height` + تمرير
+   يضمن إن القائمة ما تدبّش الفاتورة. */
+.fld-code { position: relative; }
+.scan-drop {
+  position: absolute; top: 100%; right: 0; left: 0; z-index: 60;
+  display: flex; flex-direction: column; gap: 4px;
+  max-height: 210px; overflow-y: auto; overscroll-behavior: contain;
+  margin-top: 3px; padding: 6px 8px;
+  background: #fff; color: var(--text-primary);
+  border: 1px solid var(--info); border-radius: 10px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .16);
+  font-size: 11.5px; font-weight: 700; line-height: 1.5; text-align: right;
+}
+.scan-drop[hidden] { display: none; }
+.scan-drop .scan-picks { display: flex; flex-direction: column; gap: 4px; }
+.scan-drop .scan-act {
+  width: 100%; text-align: right; border-radius: 8px; padding: 4px 8px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--text-primary);
+}
+.scan-drop .scan-act:hover { border-color: var(--accent); background: #fff; }
+.bc-field .btn { flex: 0 0 auto; white-space: nowrap; }
+
+/* 📱 بناء 143 (طلب المالك 05/10 ≈18:05: «نفس الشكل اللى هتظهر على الكمبيوتر والموبايل»):
+   على شاشة الموبايل خانة الباركود تاخد عرض الصف كامل، والكمية/Sعر يتقسموا السطر — نفس
+   ترتيب الكمبيوتر (الصفوف أصلًا `flex-wrap: wrap`). لازم تفضل **بعد** قاعدة الـ 150px
+   لأنها بنفس خصوصية الاختيار، فالمتأخر في المصدر هو اللي بيكسب. */
+@media (max-width: 640px) {
+  .fld-cust { width: 100%; }
+  .fld-code { flex: 1 1 100%; width: auto; }
+  .fld-qty { flex: 0 0 78px; width: auto; }
+  .fld-price { flex: 1 1 110px; width: auto; }
+  .fld-btn { flex: 0 0 auto; }
+  .scan-hint { font-size: 12.5px; }
+}
+
+/* بناء 171: تخفيض تدريجي لمربع الإجمالي الطولي حتى لا يحدث أوسبفلو على الشاشات الأضيق.
+   > 1180px: كامل (300px) · 980–1180px: يصغّر (240px) ويبقى جنب الحقول · < 980px: ينزل
+   تحت الحقول بعرض كامل والسطر يلتف (أفضل من أوسبفلو أفقي). */
+@media (max-width: 1180px) {
+  .inv-total-box { flex: 0 0 240px; width: 240px; }
+  .inv-total-box .t-value { font-size: 32px; }
+  .inv-total-box .t-label, .inv-total-box .t-cur { font-size: 17px; }
+  .entry-row2 .fld-code { width: 125px; }
+}
+@media (max-width: 980px) {
+  .pos-fields-entry { flex-direction: column; }
+  .entry-row2 { flex-wrap: wrap; }
+  .entry-row2 .fld.grow { flex: 1 1 180px; min-width: 0; }
+  .inv-total-box { flex: 0 0 auto; width: 100%; min-height: 90px; }
+}
+
+/* ═══ 📷 بناء 144 (أمر المالك 06/10 بحرفه: «كاميرا الموبايل هى المقصوده لكن الكمبيوتر و
+   اللاب هيشتغل بجهاز مسدس الماسح الضوئى للباركود») ═══
+   اللوحة بتنزل في **أعلى الشاشة** (`position: fixed; top: 0`) عشان الكاميرا تكون قدام وش
+   البائع وهو ماسك الموبايل، مش تحت الفاتورة. `z-index` فوق الشريط العلوي (`topbar`) وفوق
+   أي نافذة، والكانفس اللي بيقرا منه الكود **مخفي** (1px + opacity 0) لأنه أداة قياس مش
+   صورة — اللي البائع بيشوفه هو <video> بس. مافيش أي لون hex هنا (حارس التباين بيمنع
+   الرموز) كله rgb()/rgba() ومتغيرات، والبياض #fff حصريًا.
+   القاعدة دي جاية **قبل** `@media print` عشان الورق ما يطبعش الكاميرا أبدًا. */
+.cam-panel {
+  position: fixed; top: 0; right: 0; left: 0; z-index: 1400;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 8px 10px 10px;
+  background: rgba(15, 23, 42, .94); color: #fff;
+  border-bottom: 2px solid var(--accent);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .35);
+  font-size: 12.5px; font-weight: 700; line-height: 1.45; text-align: right;
+}
+.cam-panel[hidden] { display: none; }
+.cam-head { display: flex; align-items: center; gap: 8px; }
+.cam-title { flex: 0 0 auto; }
+.cam-state {
+  flex: 1 1 auto; font-size: 11px; color: rgb(226, 232, 240);
+  background: rgba(255, 255, 255, .14); border-radius: 999px; padding: 2px 8px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cam-stage {
+  position: relative; width: 100%; max-height: 46vh; overflow: hidden;
+  border-radius: 12px; background: rgb(2, 6, 23);
+}
+.cam-stage video { display: block; width: 100%; height: 100%; max-height: 46vh; object-fit: cover; }
+.cam-stage video[hidden] { display: none; }
+.cam-stage canvas {
+  position: absolute; top: 0; left: 0; width: 1px; height: 1px;
+  opacity: 0; pointer-events: none;
+}
+/* إطار التصويب: أربعة زوايا بس — النص الداخلي للكانفس ما بيشوشش على الباركود */
+.cam-sight {
+  position: absolute; top: 12%; right: 6%; bottom: 12%; left: 6%;
+  border: 2px solid rgba(255, 255, 255, .82); border-radius: 14px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, .28); pointer-events: none;
+}
+.cam-foot { display: flex; align-items: center; gap: 8px; }
+.cam-last { flex: 1 1 auto; }
+.cam-last.ok { color: rgb(134, 239, 172); }
+.cam-last.warn { color: rgb(253, 224, 71); }
+.cam-btns { display: flex; gap: 6px; flex: 0 0 auto; }
+.cam-panel .btn { background: rgba(255, 255, 255, .16); color: #fff; border: 1px solid rgba(255, 255, 255, .38); }
+.cam-panel .btn:hover { background: rgba(255, 255, 255, .28); }
+@media print { .cam-panel { display: none; } }
+
+/* 🔳 تعديل المالك — ملصق الباركود على ورقة **3.7×2.6 سم**: شرط الباركود والأرقام تحته
+   فقط، بدون أي كتابة (اسم/كود/سعر/تاريخ). مقاس الصفحة ييجي من **خصائص الطابعة**
+   (`size: auto`) ⇒ تقدر تصغّر/تكبّر من الطابعة أو من خيار Scale في نافذة الطباعة. */
+@media print {
+  #barcodePage.print-target, #barcodeSmallPage.print-target { padding: 0 !important; }
+  #barcodePage.statement-page, #barcodeSmallPage.statement-page { padding: 0 !important; }
+  #barcodePage .bc-labels, #barcodeSmallPage .bc-labels-sm { display: block; margin: 0; padding: 0; }
+  #barcodePage .bc-label, #barcodeSmallPage .bc-label-sm {
+    width: var(--bc-w, 37mm); height: var(--bc-h, 26mm); max-width: none; box-sizing: border-box;
+    margin: 0; padding: 0; border: none; border-radius: 0; background: #fff;
+    display: flex; flex-direction: column; align-items: stretch; justify-content: space-between;
+    overflow: hidden; break-inside: avoid; page-break-inside: avoid;
+  }
+  /* «الباركود فى كامل الورقة» (طلب المالك): الباركود يتمدّد على كل مساحة الملصق، وسطر الأرقام صغير تحته. */
+  #barcodePage .bc-bars, #barcodeSmallPage .bc-bars { flex: 1 1 auto; min-height: 0; width: 100%; line-height: 0; display: flex; align-items: stretch; }
+  #barcodePage .bc-label .bc-svg, #barcodeSmallPage .bc-label-sm .bc-svg { display: block; width: 100% !important; height: 100% !important; }
+  #barcodePage .bc-hrt, #barcodeSmallPage .bc-hrt { flex: 0 0 auto; font-size: 11px; font-weight: 700; letter-spacing: 1px; margin: 0; padding: 0.6mm 0; text-align: center; }
+  /* «حسب الطابعة» (تلقائي): الملصق يملأ عرض وطول الورقة اللي حددتها الطابعة */
+  #barcodePage.bc-auto .bc-label, #barcodeSmallPage.bc-auto .bc-label-sm { width: 100%; height: 100vh; }
+}
+
+/* 🔳 نافذة طباعة الباركود — سطر خيار «حسب الطابعة» */
+.bc-auto-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 13px; color: var(--text-secondary); }
+
+/* 🆕 بناء 154 — القيد المعكوس + قائمة الضغطتين على القيد:
+   - .jrn-reversed: القيد اللي اتعمله قيد عكسي (شطب + بهتان) في «القيود اليومية».
+   - .jrn-ctx: قائمة عائمة (طباعة / حذف بعمل قيد عكسي) تظهر عند الضغط مرتين. */
+tr.jrn-reversed td { color: var(--text-secondary); text-decoration: line-through; opacity: .72; }
+.jrn-ctx {
+  position: fixed; z-index: 4000; min-width: 220px; padding: 6px;
+  background: #fff; color: var(--text-primary, #0f172a);
+  border: 1px solid var(--border, #cbd5e1); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(2, 6, 23, .28);
+  font-size: 14px; user-select: none;
+}
+.jrn-ctx-item {
+  padding: 9px 12px; border-radius: 7px; cursor: pointer; white-space: nowrap;
+}
+.jrn-ctx-item:hover { background: rgba(99, 102, 241, .14); }
+.jrn-ctx-danger { color: #b91c1c; }
+.jrn-ctx-danger:hover { background: rgba(185, 28, 28, .14); }
+.jrn-ctx-off { color: var(--text-secondary, #64748b); cursor: default; }
+.jrn-ctx-off:hover { background: transparent; }
+
+/* 🧾 بناء 163 — تبويبة ضريبة المبيعات: صندوق الملخّص + صف الإجمالي الثابت + الحركات */
+.vat-summary { display: flex; flex-wrap: wrap; align-items: stretch; gap: 12px; margin-top: 10px; }
+.vat-due { flex: 0 0 auto; min-width: 240px; border: 2px solid #999; border-radius: 12px; padding: 10px 16px; background: rgba(148, 163, 184, .08); }
+.vat-due-label { font-size: 13px; color: var(--text-secondary, #475569); margin-bottom: 4px; }
+.vat-due-val { font-size: 22px; font-weight: 800; }
+.vat-cols { display: flex; flex-wrap: wrap; gap: 10px; flex: 1 1 auto; }
+.vat-col { flex: 1 1 160px; border: 1px solid var(--border, #cbd5e1); border-radius: 10px; padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; }
+.vat-col span { font-size: 12px; color: var(--text-secondary, #64748b); }
+.vat-col b { font-size: 17px; }
+.vat-prev { flex: 1 1 100%; font-size: 13px; color: var(--text-secondary, #64748b); padding-top: 2px; }
+.vat-tablewrap { max-height: 62vh; overflow: auto; }
+.vat-tablewrap thead tr.vat-totals-row th { position: sticky; top: 0; z-index: 3; background: #eef2ff; font-weight: 700; }
+.vat-open-row td { background: rgba(250, 204, 21, .14); font-weight: 600; }
+.vat-empty { text-align: center; color: var(--text-secondary, #64748b); }
+
+/* 📚 بناء 164 — دفترا الأستاذ (العام / المساعد) */
+.ledger-table tbody td { text-align: center; }
+.ledger-table tbody td:nth-child(2) { text-align: right; white-space: normal; }
+.ledger-table tfoot .ledger-total td { background: #eef2ff; font-weight: 800; }
+.ledger-table .ledger-tag { display: inline-block; font-size: 10px; font-weight: 700; color: var(--sel-fg, #1e3a8a); background: #dbeafe; border-radius: 8px; padding: 1px 7px; margin-inline-start: 6px; }
+.ledger-table tr.ledger-party td { background: rgba(148, 163, 184, .10); font-size: 12px; }
+.ledger-table .led-drill { padding: 2px 6px; font-size: 11px; line-height: 1; }
+.ledger-recon { display: inline-block; font-size: 12px; font-weight: 700; border-radius: 8px; padding: 1px 8px; }
+.ledger-recon.ok { color: #166534; background: #dcfce7; }
+.ledger-recon.no { color: #991b1b; background: #fee2e2; }
+
+/* نافذة تعليمات المسح الضوئي — build 168 */
+#mScanHelpBox .docs-head { flex: 0 0 auto; }
+#mScanHelpBox .docs-folder { margin: 0 0 10px; font-size: 12.5px; color: #0e7a6d; background: #eefaf7; border: 1px dashed #9fd8cf; border-radius: 8px; padding: 7px 11px; overflow-wrap: anywhere; }
+/* بناء 197: نفس اللونين بالحرف لكن بصيغة rgb() — قاعدة «ممنوع أي hex غير الأبيض»
+   محترمة، والصرف البصري صفر (35,48,61 = #23303d · 124,135,148 = #7c8794). */
+#mScanHelpBox .scan-help-list { margin: 0 0 12px; padding: 0 20px 0 0; display: grid; gap: 7px; font-size: 13px; line-height: 1.7; color: rgb(35, 48, 61); }
+#mScanHelpBox .scan-help-list li { text-align: right; }
+#mScanHelpBox .scan-help-noshow { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: rgb(124, 135, 148); margin: 0 0 14px; cursor: pointer; }
+#mScanHelpBox .scan-help-noshow input { width: 16px; height: 16px; cursor: pointer; }
+#mScanHelpBox .feat-btns { flex: 0 0 auto; }
+@media (max-width: 560px) { #mScanHelpBox .scan-help-list { font-size: 12px; } }
+
+
+
+/* بناء 169: الفاتورة (سداد جزئي + ملخّص الطرف) */
+.pos-party-balance { font-size: 12px; font-weight: 700; margin-inline-start: 6px; color: #334155; }
+.pos-party-balance.positive { color: #065f46; }
+.pos-party-balance.negative { color: #b91c1c; }
+.pos-paid-row { display:flex; align-items:center; gap:6px; margin-top:4px; }
+.pos-paid-label { font-size:12px; color:#475569; }
+#txtPosPaid, #txtPPPaid { width:90px; padding:4px 6px; font-size:13px; text-align:center; font-weight:700; }
+/* 🧾 بناء 190: بيانات الشيك + سطور طرق السداد المتعددة في الفاتورة */
+.pos-check-row { display:flex; gap:6px; flex-wrap:wrap; }
+.pos-check-row input { flex:1 1 110px; min-width:90px; padding:4px 6px; font-size:13px; }
+.fld-payextra { flex:1 1 100%; }
+#posPayExtraList, #ppPayExtraList { display:flex; flex-direction:column; gap:6px; margin-bottom:6px; }
+.pay-line { display:flex; gap:6px; align-items:center; flex-wrap:wrap; background:#f8fafc; border:1px solid var(--border); border-radius:8px; padding:4px 6px; }
+.pay-line select, .pay-line input { padding:4px 6px; font-size:13px; }
+.pay-line .pl-method { flex:0 0 130px; }
+.pay-line .pl-treasury { flex:1 1 130px; min-width:100px; }
+.pay-line .pl-bank { flex:1 1 110px; min-width:90px; }
+.pay-line .pl-no { flex:0 0 90px; }
+.pay-line .pl-due { flex:0 0 130px; }
+.pay-line .pl-amount { flex:0 0 100px; text-align:center; font-weight:700; }
+.pay-line [hidden] { display:none !important; }
+.pos-summary-block { display:flex; gap:28px; justify-content:flex-start; flex-wrap:wrap; border-top:1px dashed var(--border); padding-top:6px; }
+.pos-sum-col { display:flex; flex-direction:column; gap:4px; }
+.pos-sum-line { display:flex; gap:10px; font-size:13px; color:#1e293b; }
+.pos-sum-line b { font-weight:700; }
+.pos-sum-line-big { font-weight:800; font-size:14px; }
+/* بناء 210: سطر تفصيل وسائل الدفع (نقداً/بنك/محفظة/إنستا/شيك/آجل) تحت «المدفوع» */
+.pos-sum-line.pos-sum-pay { display:block; font-size:12px; font-weight:600; color:#0f766e;
+  background:#ecfdf5; border:1px dashed #99f6e4; border-radius:8px; padding:4px 8px; line-height:1.7; }
+.pos-sum-line-big b { font-size:15px; }
+.ft-total-big { font-size:19px !important; font-weight:800 !important; }
+.amount-neg { color:#b91c1c; }
+.amount-pos { color:#065f46; }
+.inv-sum-row { font-size: 13px; font-weight: bold; }
+.inv-sum-row b.amount-neg { color:#b91c1c; }
+.inv-sum-row b.amount-pos { color:#065f46; }
+
+/* 🧾 بناء 176: ورديات الكاشير */
+.shift-info { display:flex; flex-direction:column; gap:6px; background:#f8fafc; border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin:8px 0; }
+.shift-kv { display:flex; justify-content:space-between; align-items:center; gap:12px; font-size:13px; color:#334155; }
+.shift-kv b { font-weight:800; color:#0f172a; }
+.shift-kv.strong { border-top:1px dashed var(--border); padding-top:6px; font-size:15px; }
+.shift-kv.strong b { font-size:17px; color:#0b5cad; }
+.shift-denoms { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin:8px 0; }
+.shift-denom { display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:13px; background:#fff; border:1px solid var(--border); border-radius:8px; padding:6px 10px; }
+.shift-denom input { width:80px; padding:4px 6px; font-size:13px; text-align:center; }
+#shiftPrintPage.statement-page { padding: 8mm; }
+#shiftPrintPage .print-head h2 { margin:0; font-size:20px; }
+#shiftPrintPage .print-head h3 { margin:2px 0 10px; font-size:15px; color:#334155; }
+#shiftPrintPage .print-meta { display:flex; flex-wrap:wrap; gap:6px 24px; font-size:13px; margin-bottom:10px; }
+#shiftPrintPage .print-table { width:100%; border-collapse:collapse; }
+#shiftPrintPage .print-table th, #shiftPrintPage .print-table td { border:1px solid #94a3b8; padding:6px 8px; }
+#shiftPrintPage tr.tot td { background:#f1f5f9; }
+#shiftPrintPage .print-foot { margin-top:10px; font-size:12px; color:#475569; }
+#mShiftCloseBox #shiftCounted { width:100%; padding:8px; font-size:16px; font-weight:800; text-align:center; }
+@media (max-width: 640px) { .shift-denoms { grid-template-columns:1fr; } .modal.m640 { max-width:96vw; } }
+
+/* ============ 🚚 بناء 178 — سيارات مندوبين المبيعات ============ */
+.modal.m720 { width: 780px; }
+.modal.m900 { width: 960px; }
+.van-banner { display:flex; align-items:center; gap:10px; flex-wrap:wrap; background:#e0f2fe; border:1.5px solid #0284c7; color:#075985; border-radius:10px; padding:10px 14px; margin:8px 0; font-size:14px; }
+.van-info { display:flex; flex-direction:column; gap:5px; background:#f8fafc; border:1px solid var(--border); border-radius:10px; padding:9px 12px; margin:8px 0; font-size:13px; color:#334155; }
+/* 🧱 بناء 240 (F4): شريط «الرفع المعلق» — عدّاد مقيس من طوابير الصفوف المتسخة (نص ودّي بلا اصطلاح تقني) */
+.up-pending { display:flex; align-items:center; gap:8px; background:rgba(245,158,11,.14); border:1.5px solid var(--warning); color:var(--text-primary); border-radius:10px; padding:9px 14px; margin:8px 12px; font-size:13px; font-weight:600; }
+.van-grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin:6px 0; }
+.van-grid3 > div { min-width:0; }
+.van-list-wrap { max-height:44vh; overflow:auto; border:1px solid var(--border); border-radius:10px; margin:8px 0; }
+.van-sale-cols { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:8px 0; }
+.van-col-prods, .van-col-cart { display:flex; flex-direction:column; min-width:0; }
+.van-col-h { font-weight:800; font-size:13px; color:#0f172a; margin:2px 0 6px; }
+.van-prods { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:8px; max-height:40vh; overflow:auto; padding:2px; }
+.van-prod { display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:right; background:#f0fdf4; border:1px solid #86efac; border-radius:9px; padding:8px 10px; cursor:pointer; }
+.van-prod:hover { background:#dcfce7; }
+.van-prod .vp-name { font-weight:800; font-size:13px; color:#14532d; }
+.van-prod .vp-meta { font-size:11px; color:#3f6212; }
+.van-cart-wrap { max-height:40vh; overflow:auto; border:1px solid var(--border); border-radius:10px; }
+.van-totals { display:flex; align-items:center; justify-content:flex-end; gap:10px; font-size:17px; font-weight:800; color:#0f172a; border-top:2px dashed var(--border); padding-top:8px; margin:6px 0; }
+.van-report .van-rep-head h3 { margin:0 0 4px; }
+.van-rep-head p { margin:0; font-size:13px; color:#334155; }
+.van-rep-sum { background:#f8fafc; border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin:8px 0; display:flex; flex-direction:column; gap:5px; }
+.van-rep-custs { background:#f1f5f9; border:1px solid var(--border); border-radius:10px; padding:9px 12px; margin:8px 0; font-size:13px; color:#334155; }
+.van-exp-list { display:flex; flex-direction:column; gap:6px; margin:8px 0; max-height:34vh; overflow:auto; }
+.van-exp-row { display:flex; align-items:center; justify-content:space-between; gap:10px; background:#fff7ed; border:1px solid #fdba74; border-radius:9px; padding:7px 10px; font-size:13px; }
+.van-exp-block { background:#fff7ed; border:1px solid var(--border); border-radius:10px; padding:9px 12px; margin:8px 0; display:flex; flex-direction:column; gap:5px; font-size:13px; }
+/* 🧱 بناء 267 (طلب المالك) — شاشة تحميل الرحلة بقرصين: المخزن **يمين** والسيارة **شمال**،
+   والكمية اللي تتكتب في المخزن تتحوّل فورًا لسطر السيارة وتتخصم من «المتاح» يمين. */
+.modal.van-load-modal { width: 1080px; max-width: 96vw; }
+.van-load-2pane { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:8px 0; align-items:start; }
+.van-load-pane { display:flex; flex-direction:column; min-width:0; border:1px solid var(--border); border-radius:10px; background:#fff; overflow:hidden; }
+.van-pane-head { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:7px 10px; font-weight:800; font-size:13px; background:#f1f5f9; border-bottom:1px solid var(--border); color:#0f172a; }
+.van-load-wh .van-pane-head { background:#e0f2fe; color:#075985; border-bottom-color:#7dd3fc; }
+.van-load-car .van-pane-head { background:#dcfce7; color:#14532d; border-bottom-color:#86efac; }
+.van-load-pane .van-list-wrap { margin:0; border:0; border-radius:0; max-height:46vh; }
+.van-load-pane .dgv { width:100%; }
+.van-pane-sub { font-weight:600; font-size:12px; color:#475569; }
+.van-qty-in { width:78px; text-align:center; }
+.van-add-btn { border:1px solid #0284c7; background:#e0f2fe; color:#075985; border-radius:7px; padding:5px 9px; margin-inline-start:6px; cursor:pointer; font-weight:800; }
+.van-add-btn:hover { background:#bae6fd; }
+.van-del-btn { border:1px solid var(--danger); background:#fef2f2; color:#b91c1c; border-radius:7px; padding:4px 10px; cursor:pointer; font-weight:700; font-size:12px; }
+.van-del-btn:hover { background:#fee2e2; }
+.van-staged { display:inline-block; margin-inline-start:6px; font-size:11px; font-weight:700; color:#0369a1; background:#e0f2fe; border-radius:6px; padding:1px 6px; }
+.van-load-sum { display:flex; flex-wrap:wrap; gap:6px 16px; align-items:center; font-size:12.5px; color:#334155; padding:8px 10px; background:#f8fafc; border-top:1px solid var(--border); }
+.van-load-sum b { color:#0f172a; }
+@media (max-width: 860px) { .van-grid3, .van-sale-cols, .van-load-2pane { grid-template-columns:1fr; } }
+@media (max-width: 640px) { .modal.m720, .modal.m900, .modal.van-load-modal { max-width:96vw; } }
+
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   🆕 بناء 205 — إعادة تنسيق شاشة الفاتورة (بيع/شراء/سيارات المناديب)
+   طلب المالك (19/10): هيدر أقصر يحتوي النص والأزرار · العميل ينتقل لجزء السداد
+   ويظهر عند «آجل» · دمج صف المستودع مع صف إدخال الصنف · «الصافي + السداد»
+   في العمود الشمال كامل الطول · جدول الأصناف يمين وباقي المساحة · أعمدة أضيق ·
+   خلفية الجدول بيج والسطر الفعّال أبيض · توسيط محتوى الخانات · خط واضح منسّق
+   باحتواء تلقائي (مافيش حرف يتقطع).
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  --inv-bg: #EFF6FF;
+  --inv-bg-2: #DBEAFE;
+  --inv-line: #BFDBFE;
+  --inv-ink: #1E3A8A;
+}
+
+/* --- الخط والاحتواء التلقائي (بلا قصّ للحروف) --- */
+.view-sales, .view-purchases, #mVanSaleBox {
+  font-family: "Segoe UI", Tahoma, "Noto Naskh Arabic", "Cairo", "Dubai", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.view-sales label, .view-purchases label, #mVanSaleBox label,
+.view-sales .btn, .view-purchases .btn, #mVanSaleBox .btn {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.35;
+}
+.view-sales input, .view-purchases input, .view-sales select, .view-purchases select,
+#mVanSaleBox input, #mVanSaleBox select {
+  min-width: 0;
+  max-width: 100%;
+  font-family: inherit;
+  text-overflow: ellipsis;
+}
+
+/* --- الهيدر الأقصر --- */
+.view-sales .view-header, .view-purchases .view-header {
+  min-height: 0;
+  padding: 2px 0 4px;
+  gap: 8px;
+  align-items: center;
+}
+.view-sales .view-title, .view-purchases .view-title {
+  font-size: 14px;
+  line-height: 1.35;
+  font-weight: 800;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.view-sales .view-actions .btn, .view-purchases .view-actions .btn {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+/* --- هيكل الشاشة: يمين (إدخال + جدول) / شمال (الصافي + السداد) --- */
+.view-sales, .view-purchases { overflow: hidden; }
+.pos-shell { display: flex; gap: 10px; flex: 1 1 auto; min-height: 0; align-items: stretch; }
+.pos-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.pos-side { flex: 0 0 320px; width: 320px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.pos-side .inv-total-box {
+  flex: 0 0 auto;
+  width: 100%;
+  height: 150px;
+  min-height: 150px;
+  box-sizing: border-box;
+}
+.pos-side .pay-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.pos-side .pay-panel-body { flex: 1 1 auto; max-height: none; min-height: 0; overflow: auto; }
+
+.pos-main .pos-fields { padding: 7px 9px; gap: 6px; flex: 0 0 auto; }
+.pos-main .inv-items-wrap { flex: 1 1 auto; min-height: 0; margin-top: 0; }
+.pos-main .pos-footer { flex: 0 0 auto; padding: 6px 10px; gap: 6px; }
+.pos-main .pos-foot-row { gap: 10px; }
+
+/* صف إدخال واحد (بعد دمج صف المستودع) */
+.inv-entry-row { flex-wrap: wrap; align-items: flex-end; gap: 7px; }
+.inv-entry-row .fld-code { width: 132px; }
+.inv-entry-row .fld-qty { width: 68px; }
+.inv-entry-row .fld-price { width: 108px; }
+.inv-entry-row .fld-wh { width: 132px; }
+.inv-entry-row .fld.grow { flex: 1 1 200px; min-width: 140px; }
+.inv-entry-row .fld-btn { justify-content: flex-end; }
+.inv-entry-row .fld-btn .btn { padding: 6px 10px; }
+
+/* مربع العميل داخل لوحة السداد */
+.fld-cust-pay { width: 100%; background: #fff; border: 1px solid #BBF7D0; border-radius: 8px; padding: 5px 7px; }
+.pay-panel-buy .fld-cust-pay { border-color: #BFDBFE; }
+.fld-cust-pay label { font-size: 12px; font-weight: 800; color: #166534; }
+.pay-panel-buy .fld-cust-pay label { color: #1E40AF; }
+.fld-cust-pay select { width: 100%; font-size: 13px; padding: 4px 6px; }
+
+/* --- جدول الأصناف: لبني (سماوي فاتح) + سطر فعّال أبيض + توسيط + توزيع ثابت --- */
+.inv-dgv { table-layout: fixed; width: 100%; background: var(--inv-bg); }
+.inv-dgv thead th {
+  background: var(--inv-bg-2);
+  color: var(--inv-ink);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+  vertical-align: middle;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  padding: 6px 4px;
+  border-bottom: 2px solid var(--inv-line);
+}
+.inv-dgv tbody td {
+  background: var(--inv-bg);
+  color: #1F2937;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
+  vertical-align: middle;
+  padding: 5px 4px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.inv-dgv tbody tr:nth-child(even) td { background: var(--inv-bg); }
+.inv-dgv tbody tr:hover td, .inv-dgv tbody tr.selected td { background: #fff; }
+.inv-dgv tbody tr.selected td { font-weight: 700; }
+.inv-dgv tbody td .cell-input { text-align: center; width: 100%; box-sizing: border-box; }
+.inv-dgv tbody td .btn.small { padding: 3px 7px; font-size: 12px; }
+.inv-dgv .cell-actions { text-align: center; }
+
+/* --- سيارات المناديب: نفس اللغة البصرية --- */
+#mVanSaleBox .van-sale-cols .dgv { table-layout: fixed; background: var(--inv-bg); }
+#mVanSaleBox .van-sale-cols .dgv thead th {
+  background: var(--inv-bg-2); color: var(--inv-ink); text-align: center;
+  font-size: 12px; padding: 6px 4px;
+}
+#mVanSaleBox .van-sale-cols .dgv tbody td {
+  background: var(--inv-bg); text-align: center; font-size: 13px; line-height: 1.45;
+  padding: 5px 4px; overflow-wrap: anywhere;
+}
+#mVanSaleBox .van-sale-cols .dgv tbody tr:hover td,
+#mVanSaleBox .van-sale-cols .dgv tbody tr.selected td { background: #fff; }
+
+/* --- الشاشات الأضيق: العمود الشمال ينزل تحت بلا قصّ --- */
+@media (max-width: 1120px) {
+  .view-sales, .view-purchases { overflow: auto; }
+  .pos-shell { flex-direction: column; }
+  /* 📱 بناء 239 (بلاغ المالك 23/10: «البرنامج لما بفتح عمل فاتوره من الموبايل بييجى اسم
+     الصنف فوق خانة الصافى»): الجذر مقيس على القطعة الحقيقية (`_posreal_239.js`) —
+     `flex:1 1 auto` + `min-height:0` جوّه عمود = الصندوق **بينضمص** لأقل من محتواه
+     (مقاس: `.pos-main` طوله 164px ومحتواه 643px) فأسطره تفيض **وتُرسَم فوق** `.pos-side`
+     اللي نازلة تحته («اسم الصنف» y=426 مقابل «الصافي» y=580). الإصلاح: يرجع بطول محتواه
+     الطبيعي والشاشة كلها تاسكرول بـ `overflow:auto` اللي فوق — **مفيش قصّ صامت**.
+     على اللاب/الكمبيوتر (1366/1920) القعدة دي `row` أصلًا ⇒ الكود جوّه الاستعلام ما يلمسهماش. */
+  .pos-main { flex: 0 0 auto; min-height: auto; }
+  .pos-side { flex: 0 0 auto; width: 100%; }
+  .pos-side .inv-total-box { height: 120px; min-height: 120px; }
+  .pos-main .inv-items-wrap { min-height: 220px; }
+}
+@media (max-width: 760px) {
+  .inv-entry-row { flex-wrap: wrap; }
+  .inv-entry-row .fld-code, .inv-entry-row .fld-wh { width: 100%; }
+  .inv-entry-row .fld.grow { flex: 1 1 100%; }
+  .inv-dgv thead th, .inv-dgv tbody td { font-size: 11.5px; padding: 4px 3px; }
+}
+/* --- بناء 205: ضبط دقيق بعد المعاينة (صف الإدخال + سطور السداد) --- */
+.inv-entry-row .fld { gap: 2px; }
+.inv-entry-row .fld > label { font-size: 11.5px; font-weight: 700; color: #334155; }
+.inv-entry-row .fld-card { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.inv-entry-row .fld-card .lbl-accent { font-size: 11.5px; }
+.inv-entry-row .fld-card .stock-hint { font-size: 11px; padding: 1px 7px; border-radius: 999px; }
+.inv-entry-row .fld.grow { display: flex; flex-direction: column; min-width: 0; }
+.inv-entry-row .fld.grow input { width: 100%; box-sizing: border-box; }
+.inv-entry-row input, .inv-entry-row select { height: 30px; font-size: 13px; padding: 3px 6px; box-sizing: border-box; }
+.inv-entry-row .fld-btn .btn { height: 30px; padding: 0 12px; }
+
+/* --- بناء 206 (بلاغ المالك 20/10: «كلمة اسم الصنف بتتمدد لفوق وخانات الفاتورة بتنزل
+   لتحت لما بختار صنف»): السبب إن شارة الرصيد بعد اختيار الصنف بتطول (اسم + مخزن +
+   رصيد + سعر) فبتلتف سطرين ⇒ صف الإدخال يطول والخانات تنزل. الحل: الشارة **سطر واحد**
+   بقصّ ثلاث نقاط، والاسم ما يلتفش، وارتفاع الخانات ثابت ⇒ الصف ما يتغيّرش بالاختيار. */
+.inv-entry-row .fld-card { flex-wrap: nowrap; min-width: 0; min-height: 18px; }
+.inv-entry-row .fld-card .lbl-accent { white-space: nowrap; flex: 0 0 auto; }
+.inv-entry-row .fld-card .stock-hint {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 62%;
+  min-width: 0;
+  display: block;
+}
+
+/* سطر السداد: الطريقة + المبلغ + الحذف في سطر، والخزينة/البنك في سطر تحته */
+.pay-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.pay-line .pl-method { order: 1; flex: 1 1 120px; min-width: 0; }
+.pay-line .pl-amount { order: 2; flex: 0 0 92px; }
+.pay-line .btn { order: 3; flex: 0 0 auto; padding: 3px 8px; }
+.pay-line .pl-treasury { order: 4; flex: 1 1 100%; min-width: 0; }
+.pay-line .pl-bank { order: 5; flex: 1 1 120px; min-width: 0; }
+.pay-line .pl-no { order: 6; flex: 0 0 92px; }
+.pay-line .pl-due { order: 7; flex: 1 1 130px; min-width: 0; }
+.pay-line select, .pay-line input { height: 30px; box-sizing: border-box; font-size: 13px; padding: 3px 6px; }
+.pay-panel-body { gap: 7px; }
+.pay-panel-head { gap: 6px; }
+
+/* ملخّص الفوتر: أعمدة مرتبة بلا زحمة */
+.pos-summary-block { gap: 22px; }
+.pos-sum-col { display: flex; flex-direction: column; gap: 3px; min-width: 190px; }
+.pos-sum-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; }
+.pos-sum-line b { font-variant-numeric: tabular-nums; }
+/* --- بناء 205: حدود واضحة لكل خانات الإدخال (كانت خانة اسم الصنف بلا حدود فتبان فاضية) --- */
+.inv-entry-row input, .inv-entry-row select {
+  border: 1px solid #CBD5E1;
+  border-radius: 7px;
+  background: #fff;
+  color: #0F172A;
+}
+.inv-entry-row input:focus, .inv-entry-row select:focus {
+  border-color: var(--primary);
+  outline: 2px solid rgba(37, 99, 235, .18);
+}
+.inv-entry-row .fld.grow .fld-card { order: 0; }
+.inv-entry-row .fld.grow input { order: 1; }
+/* --- بناء 205: زر السكانر أول السطر (خطوة أولى في الإدخال) --- */
+.inv-entry-row .fld-scan { flex: 0 0 auto; }
+.inv-entry-row .fld-scan .btn { padding: 0 14px; font-weight: 800; }
+/* --- بناء 211: قائمة اقتراح الأصناف بعرض الخانة نفسها (بلا أرقام) + رسالة الشيك الثابتة --- */
+.fld.grow { position: relative; }
+.prod-drop { max-height: 240px; }
+.prod-drop .scan-act { font-size: 12.5px; font-weight: 800; padding: 6px 10px; text-align: right; }
+.prod-drop .scan-act .prod-code { display: none; }
+#mCheckPartyWarnBox { max-width: 560px; text-align: center; }
+#mCheckPartyWarnBox h3 { font-size: 18px; font-weight: 900; color: #B91C1C; margin-bottom: 10px; }
+#mCheckPartyWarnBox p { font-size: 15px; font-weight: 800; line-height: 1.9; color: #111; margin-bottom: 16px; }
+#mCheckPartyWarnBox .modal-actions { justify-content: center; }
+
+/* --- بناء 213: العدد المتاح أول شارة الصنف وغامق (ما يتخبّاش تحت اسم طويل) --- */
+.stock-hint .sh-count { font-weight: 900; flex: 0 0 auto; }
+.stock-hint .sh-count b { font-weight: 900; color: #0B3D91; }
+.stock-hint .sh-sep { flex: 0 0 auto; opacity: .55; }
+
+/* --- بناء 212: نافذة حالة الشبكة/الاشتراك --- */
+#mStatusInfoBox h3 { margin-bottom: 12px; }
+.status-kv { display: flex; flex-direction: column; gap: 9px; margin: 4px 0 16px; }
+.status-kv .status-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 9px 12px; border: 1px solid var(--line, #E2E8F0); border-radius: 9px; background: #F8FAFC; }
+.status-kv .status-row b { font-weight: 800; color: var(--text, #0F172A); }
+.status-kv .status-row span { font-weight: 800; color: var(--text-secondary); text-align: left; unicode-bidi: plaintext; }
+.status-kv .status-ok { color: #15803D !important; }
+.status-kv .status-bad { color: #B91C1C !important; }
+.status-kv .status-note { font-size: 12.5px; font-weight: 700; color: var(--text-secondary); line-height: 1.8; }
+
+/* --- بناء 226: منع الرصيد السالب + تنبيه الأرصدة السالبة القديمة --- */
+.neg-warn { background: #FEF2F2; border: 1.5px solid #FCA5A5; color: #991B1B; border-radius: 10px; padding: 11px 14px; margin: 0 0 12px; font-size: 13.5px; font-weight: 800; line-height: 1.9; }
+.neg-warn b { font-weight: 900; color: #7F1D1D; }
+.neg-warn .neg-list { margin: 6px 14px 0 0; padding: 0; list-style: disc; }
+.neg-warn .neg-list li { margin: 2px 0; }
+.funds-short-body { text-align: right; }
+.funds-short-lead { font-size: 14.5px; font-weight: 800; line-height: 2; color: #111; margin-bottom: 10px; }
+.funds-short-lead b { font-weight: 900; color: #B91C1C; }
+.funds-short-sub { font-size: 13px; font-weight: 800; color: #334155; margin: 8px 0 6px; }
+.funds-short-list { margin: 0 16px 8px 0; padding: 0; list-style: disc; font-size: 13px; line-height: 1.9; color: #0F172A; }
+.funds-short-list .funds-type { color: #64748B; font-weight: 700; }
+.funds-short-total { font-size: 13px; font-weight: 800; color: #0F172A; margin-top: 4px; }
+.funds-short-actions-note { font-size: 12.5px; font-weight: 700; color: #475569; line-height: 1.9; margin-top: 10px; }
+/* ============================================================
+   📱 بناء 239 — طلب المالك 23/10 حرفيًا:
+   «سطر اسم البرنامج و متصل بالسحابه و التاريخ و نهاية الاشتراك و الاشتراك و تغيير
+    كلمة المرور دول ملهمش لازمه علشان نوفر مساحه فى شاشة الموبايل» و
+   «اسطر ازرار التنقل ممكن يكون فى زرار واحد صغير يفتحها و يقفلها» و
+   «دا كله يخص تعديلات شاشة الموبايل فقط و ليس شاشة اللاب او الكمبيوتر».
+   ────────────────────────────────────────────────────────────
+   القواعد اللي امشت عليها (ودي هي اللي بتحمي اللاب من أي أثر):
+   (١) **كل شيء جوّه `@media screen and (max-width: 860px)`** — مافيش ولا سطر بره
+       الاستعلام يغيّر قاعدة قائمة، ومافيش `if (window.innerWidth…)` جوّه منطق البرنامج.
+   (٢) الإخفاء بـ CSS بس: عناصر الهيدر **لسه في الشجرة** بنفس الـ id وبيتحديث محتواها
+       عادي ⇒ أي كود يقرأ `#dbStatus`/`#clock`/`#userInfo` ما كسرش، وحارس بناء 132
+       («اللي مالوش صلاحية متظهرش من الأساس») لسه شغال على نفس المعطيات.
+   (٣) الطيّ بـ **كلاس `.nav-open` على `#sidebar`** — ومعناه موجود جوّه الاستعلام وحده،
+       فلو الكلاس اتلزق على اللاب **مافيش أي أثر** (`display:flex` الأساسي بيفضل زي ما هو).
+       الحارس الحيّ بتاع المالك (`ownerNodeIsHurt`) بيفحص `hidden` و`style.display`
+       فقط ⇒ كلاس من CSS ما يستفزهوش، وما بي عملهوش loop.
+   (٤) `screen` مش `all`: ورقة الطباعة عرضها ≈794px ⇒ كانت هتمسكها قاعدة الـ860 وتغيّر
+       الورق. القيد ده **يمنع** إن أي تفصيلة موبايل تنزل على الطباعة خالص.
+   ============================================================ */
+
+/* زرار الطيّ: مُخفي على الكمبيوتر/اللاب (ودايمًا على الطباعة) */
+#btnNavToggle { display: none; }
+
+/* 🧱 بناء 247: زرارَي السحابة في الهيدر — على الكمبيوتر الاسم الكامل،
+   وعلى الموبايل الاسم القصير بس (السطر واحد وضيق). النصّان في نفس الزرار
+   ونفس الـ id ونفس المنطق ⇒ مافيش نسخة تانية من السلوك.
+   القاعدة دي بره استعلام الموبايل عمدًا: الاسم القصير `display:none` على
+   الكمبيوتر، و`[hidden] { display:none !important }` (سطر 3) بيظلّ الزرار
+   نفسه مخفي قبل الدخول، فالشكل القديم ما اتغيّرش. */
+.sync-short { display: none; }
+
+@media screen and (max-width: 860px) {
+  /* (أ) الهيدر بقى سطر واحد: الاسم/البراند/الحالة/التاريخ/الاشتراك/تغيير الباسورد يتشالوا،
+     ويفضل «مين داخل + الشبكة + الخروج + ☰ الأقسام» بس. */
+  .app-header { padding: 6px 10px; gap: 4px; }
+  .app-header .header-right,
+  .app-header .app-title,
+  .app-header .app-sub,
+  #dbStatus,
+  #clock,
+  #subInfo,
+  #btnSubStatus,
+  #btnChangePw { display: none; }
+  .app-header .header-left { gap: 6px; }
+  .app-header .btn.small { padding: 5px 9px; font-size: 12px; }
+
+  /* 🧱 بناء 247: على الموبايل الاسم القصير بس («تحديث» / «تصدير») — نفس الزرار ونفس
+     الـ id ونفس النداء، الفرق في النص وحده، فـ«الزرارين في كل الشاشات» مش محتاجين
+     نسخة تانية من السلوك. البلوك جوه `screen` + `max-width:860px` ⇒ الطباعة واللاب ما بيشوفوهماش. */
+  .app-header .sync-long { display: none; }
+  .app-header .sync-short { display: inline; }
+
+  /* (ب) سطور أزرار التنقل → زرار واحد صغير يفتحها/يقفلها (مقفولة أول ما تفتح) */
+  #btnNavToggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 800;
+    line-height: 1;
+  }
+  #sidebar.topnav { display: none; }
+  #sidebar.topnav.nav-open { display: flex; padding: 8px; }
+
+  /* (ج) سطر الشاشة ما ياخدش 3 سطور على ضيق الموبايل (البراند على الشاشات الكبيرة كفاية) */
+  .view-title { font-size: 14px; line-height: 1.5; }
+  .view-title .screen-only { display: none; }
+
+  /* (د) ترتيب الشاشة على الموبايل زي أي تطبيق محاسبي معتمد (QuickBooks / Zoho Books):
+     بيانات الصنف ⇒ الأصناف ⇒ العميل والصافي والسداد ⇒ الإجمالي والحفظ.
+     `display:contents` على `.pos-main` يخلّي أبنائها عناصر مباشرة في `.pos-shell`
+     (اللي بقى عمودي أصلًا على المقارات الصغيرة) فيشتغلّ معهم `order` — **من غير أي
+     تغيير في DOM ومن غير أي لمس لشاشة اللاب**: البلوك ده كله جوه `screen` + `max-width:860px`
+     فطباعة A4 (≈794px) والكمبيوتر ما بيشوفوهماش خالص. */
+  .pos-shell { gap: 8px; }
+  .pos-main { display: contents; }
+  .pos-main .pos-fields { order: 1; }
+  .pos-main .inv-items-wrap { order: 2; }
+  .pos-side { order: 3; }
+  .pos-main .pos-footer { order: 4; }
+
+  /* (هـ) أزرار الشاشة تبقى على سطر واحد موزّع، مش كلمات بتلف */
+  .view-header .view-actions { gap: 6px; }
+  .view-header .view-actions .btn { flex: 1 1 auto; min-height: 38px; padding: 6px 8px; font-size: 11.5px; }
+
+  /* (و) صف إدخال الصنف = فورماة من عمودين، الخانة بارتفاع 44px وخط 16px
+     (لو الخط أقل من 16px كروم على الموبايل بيعمل تكبير تلقائي وقت الكتابة) */
+  .pos-main .pos-fields { padding: 8px; }
+  .inv-entry-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: end; }
+  .inv-entry-row .fld { min-width: 0; width: auto; }
+  .inv-entry-row .fld.grow { grid-column: 1 / -1; }
+  .inv-entry-row .fld-btn { grid-column: 1 / -1; }
+  .inv-entry-row input, .inv-entry-row select { height: 44px; font-size: 16px; padding: 4px 8px; }
+  .inv-entry-row .fld-btn .btn { height: 44px; padding: 0 12px; font-size: 14px; }
+  .inv-entry-row .fld-scan .btn { height: 44px; padding: 0 10px; }
+
+  /* (ز) أصناف الفاتورة: ١٠ أعمدة على ٣٩٠px = متدهوسة. على الموبايل كل صنف **كارت**
+     بعنوان واضح جوه كل خانة (`td::before`) — نفس شكل الفاتورة في تطبيقات المحاسبة. */
+  .pos-main .inv-items-wrap { flex: 0 0 auto; min-height: 0; max-height: none; overflow: visible; padding: 6px; }
+  .inv-dgv { table-layout: auto; width: 100%; background: transparent; }
+  .inv-dgv thead { display: none; }
+  .inv-dgv, .inv-dgv tbody { display: block; width: 100%; }
+  .inv-dgv tbody tr,
+  .inv-dgv tbody tr:nth-child(even) {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 3px 8px;
+    align-items: center;
+    background: var(--inv-bg);
+    border: 1px solid var(--inv-line);
+    border-radius: 10px;
+    padding: 8px 9px;
+    margin-bottom: 7px;
+  }
+  #viewSales .inv-dgv tbody tr, #viewPurchases .inv-dgv tbody tr { height: auto; }
+  .inv-dgv tbody td,
+  .inv-dgv tbody tr:nth-child(even) td,
+  .inv-dgv tbody tr:hover td,
+  .inv-dgv tbody tr.selected td,
+  #viewSales .inv-dgv tbody td, #viewPurchases .inv-dgv tbody td {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: none;
+    padding: 1px 0;
+    text-align: start;
+    font-size: 13px;
+  }
+  /* مواضع الكارت (محدّدة سطر-سطر ⇒ لو الضريبة اتخفت مكانها فضي وبس).
+     🔢 بناء 270: عمود «م» (الرقم المسلسل) بقى أول خانة ⇒ كل المواضع اتزحزحت +1
+     (١ م · ٢ كود · ٣ الصنف · ٤ الوحدة · ٥ الكمية · ٦ السعر · ٧ الخصم · ٨ الضريبة ·
+      ٩ الإجمالي · ١٠ حذف) — أرقام nth-child بتعدّ الخانات المخفية كمان فالمكان بيفضل فاضي. */
+  .inv-dgv tbody td:nth-child(1) { grid-column: 1 / 2; grid-row: 1; justify-content: center; font-weight: 800; color: var(--text-muted); }
+  .inv-dgv tbody td:nth-child(3) { grid-column: 2 / 4; grid-row: 1; font-weight: 800; color: var(--text-primary); }
+  .inv-dgv tbody td:nth-child(10) { grid-column: 4 / 5; grid-row: 1; justify-content: center; }
+  .inv-dgv tbody td:nth-child(2) { grid-column: 1 / 2; grid-row: 2; }
+  .inv-dgv tbody td:nth-child(4) { grid-column: 2 / 3; grid-row: 2; }
+  .inv-dgv tbody td:nth-child(5) { grid-column: 3 / 5; grid-row: 2; }
+  .inv-dgv tbody td:nth-child(6) { grid-column: 1 / 3; grid-row: 3; }
+  .inv-dgv tbody td:nth-child(7) { grid-column: 3 / 5; grid-row: 3; }
+  .inv-dgv tbody td:nth-child(8) { grid-column: 1 / 3; grid-row: 4; }
+  .inv-dgv tbody td:nth-child(9) { grid-column: 3 / 5; grid-row: 4; font-weight: 800; color: var(--inv-ink); font-size: 14px; }
+  /* عناوين الخانات اللي اتشال منها رأس الجدول */
+  .inv-dgv tbody td:nth-child(1)::before { content: "#"; }
+  .inv-dgv tbody td:nth-child(2)::before { content: "كود"; }
+  .inv-dgv tbody td:nth-child(3)::before { content: "الصنف:"; }
+  .inv-dgv tbody td:nth-child(4)::before { content: "الوحدة:"; }
+  .inv-dgv tbody td:nth-child(5)::before { content: "الكمية:"; }
+  .inv-dgv tbody td:nth-child(6)::before { content: "السعر:"; }
+  .inv-dgv tbody td:nth-child(7)::before { content: "الخصم:"; }
+  .inv-dgv tbody td:nth-child(8)::before { content: "الضريبة:"; }
+  .inv-dgv tbody td:nth-child(9)::before { content: "الإجمالي:"; }
+  .inv-dgv tbody td::before { color: var(--text-muted); font-size: 11.5px; font-weight: 800; white-space: nowrap; flex: 0 0 auto; }
+  .inv-dgv tbody td:nth-child(10)::before { content: ""; }
+  .inv-dgv tbody td .cell-input { flex: 1 1 auto; width: auto; min-width: 0; height: 40px; font-size: 16px; text-align: center; }
+  .inv-dgv tbody td .btn.small { height: 40px; padding: 0 10px; font-size: 14px; }
+
+  /* (ح) عمود الصافي والسداد بقى بطاقة كاملة العرض: رقم الصافي بارز بس مش بيبتلع نص الشاشة */
+  .pos-side { gap: 8px; }
+  .pos-side .inv-total-box { height: auto; min-height: 82px; padding: 10px 12px; }
+  .pos-side .pay-panel { flex: 0 0 auto; }
+  .pos-side .pay-panel-body { flex: 0 0 auto; max-height: none; min-height: 0; overflow: visible; }
+  .fld-cust-pay select, .pos-paid-row input, .pay-panel .btn { min-height: 44px; }
+  .fld-cust-pay select, .pos-paid-row input { font-size: 16px; }
+  /* بأمانة القياس: «نقداً» (سطر 2343) بخصوصية **الـ id** خطّها 13px، والقاعدة اللي فوقها
+     (class + عنصر) ما تكسبهاش ⇒ الخانة كانت بيفضل خطّها 13 على الموبايل (مقيس run5:
+     `{"#txtPosPaid":{"h":44,"fs":13}}`) وكروم الموبايل بيكبّر الصفحة وقت الكتابة.
+     العلاج بنفس الخصوصية (id)، وكسر الترخيص بلا قهر. */
+  #txtPosPaid, #txtPPPaid { font-size: 16px; }
+
+  /* (ط) ذيل الفاتورة: زرار الحفظ بقى العمل الأساسي (عرض كامل وإصبع مريح) */
+  .pos-main .pos-footer { padding: 8px 10px; gap: 8px; }
+  .pos-foot-row { gap: 8px; }
+  .fld-inline input { height: 44px; font-size: 16px; }
+  .pos-footer .btn { flex: 1 1 100%; min-height: 46px; font-size: 14px; }
+
+  /* (ي) تنفس أقل حواف + احترام نتافة الموبايل تحت (النوتش/شريط الأزرار) */
+  .content { padding: 10px 8px calc(14px + env(safe-area-inset-bottom)); }
+}
+
+/* ================= 🆕 بناء 266: زرار «قفل وتصفية الرحلة» يبان =================
+   كان العمود 8% و.dgv tbody td بـ white-space:nowrap + overflow:hidden، فالأزرار
+   الخمسة كانت بتتقص و«تصفية» مش بتظهر خالص (بلاغ المالك: «فى الجنب أوى مش ظاهر»).
+   الحل: عمود الإجراءات ياخد مساحة أكبر + يلتف على سطرين + مفيش قص. */
+#dgvVanTrips .cell-actions {
+  white-space: normal;
+  overflow: visible;
+  max-width: none;
+  min-width: 180px;
+  line-height: 1.9;
+}
+#dgvVanTrips .cell-actions .btn.small {
+  margin: 2px 3px;
+  padding: 4px 8px;
+  font-size: 11.5px;
+}
+#dgvVanTrips .cell-actions .btn.small.van-settle-btn {
+  background: #0d9488;
+  color: #fff;
+  font-weight: 800;
+}
+@media (max-width: 760px) {
+  #dgvVanTrips .cell-actions { min-width: 130px; }
+  #dgvVanTrips .cell-actions .btn.small { padding: 4px 6px; font-size: 11px; margin: 2px; }
+}
+/* ================= بناء 277 — زرار «تصفية الرحلة» ما ينزلش مع قائمة الأصناف =================
+   كان الزرار جوه `.modal-actions` في آخر نافذة `#mVanSettle`، والنافذة نفسها `.modal`
+   بلا سقف ارتفاع وبلا سكرول (styles.css: `.modal` مالوش max-height/overflow) ⇒ قائمة
+   «باقي البضاعة صنفًا صنفًا» (#vanSettleGoods، بناء 270) + ١١ سطر ملخص كانوا بيدفعوه
+   لتحت الشاشة على 1366×768.
+   الحل (نطاقه النافذة دي بس): النافذة بتسكرول جوّاها بسقف 92vh، وشريط الزراير بقى
+   لاصق في قاع النافذة (position:sticky) ⇒ الأصناف بتعدّي وراه والزرار واقف مكانه. */
+#mVanSettleBox {
+  max-height: 92vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 0;
+}
+#mVanSettleBox > .modal-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  background: #fff;
+  margin-top: 14px;
+  padding: 12px 0 14px;
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -10px 16px -12px rgba(15, 23, 42, 0.28);
+}
+
+/* ================= بناء 273 — موبايل المندوب: أزرار كبيرة وواضحة ================= */
+@media (max-width: 760px) {
+  /* شاشة رحلات السيارات: كروت بدل جدول 9 أعمدة — كل زرار بعرض مريح للإصبع */
+  #dgvVanTrips { display: block; width: 100%; }
+  #dgvVanTrips thead { display: none; }
+  #dgvVanTrips tbody, #dgvVanTrips tr, #dgvVanTrips td { display: block; width: 100%; }
+  #dgvVanTrips tr {
+    border: 1px solid var(--border); border-radius: 14px; background: #fff;
+    margin: 0 0 12px; padding: 10px 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  }
+  #dgvVanTrips td { border: 0; padding: 5px 2px; text-align: right; font-size: 14px; }
+  #dgvVanTrips td:nth-child(1) { font-weight: 900; font-size: 15px; }
+  #dgvVanTrips td:nth-child(1)::before { content: "رحلة #"; }
+  #dgvVanTrips td:nth-child(2)::before { content: "🚚 "; }
+  #dgvVanTrips td:nth-child(3)::before { content: "🧑‍💼 المندوب: "; color: #64748b; }
+  #dgvVanTrips td:nth-child(4)::before { content: "📅 "; color: #64748b; }
+  #dgvVanTrips td:nth-child(5)::before { content: "📦 الحمولة: "; color: #64748b; }
+  #dgvVanTrips td:nth-child(6)::before { content: "🧾 المبيع: "; color: #64748b; }
+  #dgvVanTrips td:nth-child(7)::before { content: "💵 نقد متوقّع: "; color: #64748b; }
+  #dgvVanTrips td:nth-child(8)::before { content: "الحالة: "; color: #64748b; }
+  #dgvVanTrips .cell-actions {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;
+    min-width: 0; overflow: visible;
+  }
+  #dgvVanTrips .cell-actions .btn.small {
+    flex: 1 1 45%; min-height: 44px; font-size: 14px; font-weight: 800;
+    padding: 10px 12px; margin: 0; border-radius: 10px;
+  }
+  #vanRepBanner { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  #vanRepBanner .btn { flex: 1 1 100%; min-height: 48px; font-size: 15px; font-weight: 800; }
+  #viewVanSales .view-actions .btn { min-height: 42px; font-size: 13px; }
+}
+/* ================= بناء 274 — شاشة مندوب السيارة = شاشة البيع العادية ================= */
+.pos-van-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border: 1px solid #99F6E4;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #F0FDFA 0%, #ECFEFF 100%);
+  color: #134E4A;
+  font-weight: 700;
+}
+.pos-van-banner .pvb-main { font-size: 14px; line-height: 1.6; }
+.pos-van-banner .pvb-warn { color: #B91C1C; font-weight: 800; }
+.pos-van-banner .pvb-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.pos-van-banner .btn { margin: 0; }
+/* مخزن المندوب مثبّت — الشكل بيقول للمستخدم إنه مقفول مش معطّل بالغلط */
+#cmbPosWarehouse:disabled {
+  background: #F1F5F9;
+  color: #0F172A;
+  font-weight: 800;
+  opacity: 1;
+  cursor: not-allowed;
+}
+@media (max-width: 760px) {
+  .pos-van-banner { flex-direction: column; align-items: stretch; padding: 10px; }
+  .pos-van-banner .pvb-main { font-size: 13.5px; }
+  .pos-van-banner .pvb-actions .btn {
+    flex: 1 1 45%;
+    min-height: 44px;
+    font-size: 14px;
+    font-weight: 800;
+  }
+}
+/* ================= بناء 275 — سجل حركات المندوب + مصروفات احترافية ================= */
+.van-grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 6px 0; }
+.van-grid4 > div { min-width: 0; }
+.van-log-sum { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0; }
+.van-log-sum > div {
+  display: flex; flex-direction: column; gap: 2px;
+  background: #F8FAFC; border: 1px solid var(--border); border-radius: 10px;
+  padding: 8px 10px; font-size: 12px; color: #475569;
+}
+.van-log-sum > div b { font-size: 15px; color: #0F172A; font-variant-numeric: tabular-nums; }
+.van-log-pos { color: #047857; font-weight: 800; }
+.van-log-neg { color: #B91C1C; font-weight: 800; }
+.van-log-time { display: block; font-size: 11px; color: #64748B; font-weight: 600; }
+.van-log-empty { grid-column: 1 / -1; text-align: center; color: #64748B; font-size: 13px; padding: 8px; }
+.van-exp-total { text-align: left; font-size: 13px; color: #334155; padding: 6px 2px; }
+#dgvVanExp td, #dgvVanLog td { font-variant-numeric: tabular-nums; }
+#dgvVanExp .cell-actions { white-space: nowrap; }
+@media (max-width: 860px) { .van-grid4 { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 760px) {
+  .van-grid4 { grid-template-columns: 1fr 1fr; }
+  .van-log-sum { grid-template-columns: 1fr 1fr; }
+  #dgvVanLog, #dgvVanExp { display: block; width: 100%; }
+  #dgvVanLog thead, #dgvVanExp thead { display: none; }
+  #dgvVanLog tbody, #dgvVanLog tr, #dgvVanLog td,
+  #dgvVanExp tbody, #dgvVanExp tr, #dgvVanExp td { display: block; width: 100%; }
+  #dgvVanLog tr, #dgvVanExp tr {
+    border: 1px solid var(--border); border-radius: 12px; background: #fff;
+    margin: 0 0 10px; padding: 8px 10px; box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  }
+  #dgvVanLog td, #dgvVanExp td { border: 0; padding: 4px 2px; text-align: right; font-size: 14px; }
+  #dgvVanLog td:nth-child(2)::before { content: "📅 "; color: #64748B; }
+  #dgvVanLog td:nth-child(3)::before { content: ""; }
+  #dgvVanLog td:nth-child(5)::before { content: "المبلغ: "; color: #64748B; }
+  #dgvVanLog td:nth-child(6)::before { content: "الأثر على العهدة: "; color: #64748B; }
+  #dgvVanExp td:nth-child(1)::before { content: "مصروف #"; color: #64748B; }
+  #dgvVanExp td:nth-child(2)::before { content: "📅 "; color: #64748B; }
+  #dgvVanExp td:nth-child(4)::before { content: "إيصال: "; color: #64748B; }
+  #dgvVanExp td:nth-child(5)::before { content: "عدّاد: "; color: #64748B; }
+  #dgvVanExp td:nth-child(6)::before { content: "لترات: "; color: #64748B; }
+  #dgvVanExp td:nth-child(7)::before { content: "المبلغ: "; color: #64748B; }
+  #dgvVanExp .cell-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  #dgvVanExp .cell-actions .btn.small {
+    flex: 1 1 45%; min-height: 44px; font-size: 14px; font-weight: 800; padding: 10px 12px; margin: 0;
+  }
+  #mVanExpense .modal-actions .btn, #mVanRepLog .modal-actions .btn { min-height: 44px; font-size: 14px; font-weight: 800; }
+  #mVanExpense .van-grid3, #mVanExpense .van-grid4 { grid-template-columns: 1fr 1fr; }
+}
+/* ⌨️ بناء 276 — اختيار الصنف من قائمة الاقتراحات بأسهم الكيبورد (لأعلى/لأسفل) */
+.prod-drop .scan-act.active,
+.prod-drop .scan-act:focus {
+  background: #E0F2FE;
+  border-color: #0284C7;
+  color: #075985;
+  outline: 2px solid #7DD3FC;
+  outline-offset: -2px;
+}
+/* 🧾 بناء 281 — «كل وسائل الدفع اللي مع المندوب» ظهرت في الاستعلام/التقرير
+   (طلب المالك: «عايز يظهر في شاشات تصفية الرحلة أو الاستعلام اللي موجود على
+   الموبايل كل اللى مع المندوب من شيكات أو غيرها من طرق الدفع كلها اللي حصل بيها
+   من العملاء» + «وسائل الدفع تكون موضّحة في التقرير»).
+   المشكلة إن السطور زادت (نقدي + بنك + محفظة + إنستا + شيك + آجل + بلوك الشيكات
+   سطر-سطر) — ونفس عطل بناء 277 بالظبط بيرجع: `.modal-overlay` ثابتة وموسّطة عمودية
+   و`.modal` مالهاش max-height/overflow ⇒ النافذة بتتمدد برّه الشاشة وزراير
+   «إغلاق/تحديث» بتقع تحتها ومفيش سكرول يوصّلها.
+   الحل نفس مقاس 277 المقيّس، وبالنطاق الضيّق: النافذتين اللي بناء 281 زاد فيهم
+   سطور بس (`#mVanRepLogBox` الاستعلام · `#mVanReportBox` التقرير) — باقي الشاشات
+   بما فيها شاشة بيع المندوب ما اتلمستش خالص. */
+#mVanRepLogBox,
+#mVanReportBox {
+  max-height: 92vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 0;
+}
+#mVanRepLogBox > .modal-actions,
+#mVanReportBox > .modal-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  background: #fff;
+  margin-top: 14px;
+  padding: 12px 0 14px;
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -10px 16px -12px rgba(15, 23, 42, .28);
+}
+/* بلوك وسائل الدفع في الاستعلام (`#vanLogPay`) — بياخد شكل `.van-info` من فوق (سطر 2415)
+   وبيفضل مسؤول عن نفسه بس: سقف داخلي عشان لو الشيكات كتير ما تدفعش جدول السجل تحت الشاشة. */
+#vanLogPay {
+  max-height: 34vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* بلوك الشيكات تفصيلًا (عميل · بنك · رقم · استحقاق · حالة) — بيقعد بعد الملخص
+   بفاصل منقّط عشان يتفرّق عن سطور الأرقام. */
+.van-pay-chks {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+.van-pay-chks > b {
+  display: block;
+  margin-bottom: 4px;
+}
+.van-pay-chks .shift-kv span {
+  color: #475569;
+}
+
+/* 📱 بناء 288 — سكرول شاشات الموبايل (طلب المالك 2/11: «سكرول كل شاشات الموبايل …
+   خاصة فواتير مندوب السيارة»). العلّة المقيسة: .modal-overlay ثابتة (fixed inset:0)
+   بلا overflow — فالنافذة الطويلة (بيع السيارة m900 · التعبئة m900 · الأصناف m640
+   · القيد · الجرد · نافذة الحذف…) بتتقص من فوق ومن تحت ومفيش طريقة توصل للمحتوى.
+   الترميم مقيس ومقفول على مقاس الموبايل (≤860px) — الديسكتوب والورق ما اتلمسوا أبدًا: */
+@media (max-width: 860px) {
+  .modal-overlay { align-items: flex-start; overflow: auto; -webkit-overflow-scrolling: touch; padding: 10px; }
+  .modal-overlay > .modal { margin: auto; }
+  .modal-tall { max-height: none; }
+}
+
+/* 🧾 بناء 289 — جدول «طرق الدفع في الرحلة» في نافذة تصفية الرحلة (طلب المالك:
+   «تقرير قفل الرحلة يوضح كل طرق الدفع شكلاً ومضموناً»). كل الوسائل دايمًا ظاهرة
+   حتى لو صفر (صف مبهم)، بعمود عدد الفواتير وعمود المبلغ، والإجماليات في الذيل. */
+.pay-tbl { margin: 8px 0 2px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.pay-tbl-title { background: var(--bg); color: var(--primary-dark); font-size: 12.5px; font-weight: bold; padding: 6px 10px; border-bottom: 2px solid var(--primary-dark); }
+.pay-tbl table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.pay-tbl th { background: var(--bg); color: var(--text-secondary); font-size: 11px; padding: 4px 10px; border-bottom: 1px solid var(--border); text-align: right; }
+.pay-tbl th.c { width: 70px; text-align: center; }
+.pay-tbl th.amt { width: 110px; text-align: left; }
+.pay-tbl td { padding: 4px 10px; border-bottom: 1px dashed var(--border); }
+.pay-tbl td.c { width: 70px; text-align: center; color: var(--text-secondary); }
+.pay-tbl td.amt { width: 110px; text-align: left; font-weight: bold; white-space: nowrap; }
+.pay-tbl tr.zero td { color: var(--text-muted); }
+.pay-tbl tr.tot td { border-top: 2px solid var(--primary-dark); border-bottom: none; font-weight: bold; color: var(--primary-dark); }
+
+/* 📤 بناء 291 — شاشة الطابور للفواتير (طلب المالك بالحرف: «ابدا»).
+   حالة الصف مقيسة من نفس مصادر الرفع (syncedHas / dirty / pushFailed):
+   ✅ مرفوعة (success) · 🕐 مستنية (warning) · ❌ فاشلة (danger). الديسكتوب والموبايل نفس الشكل. */
+.invq-chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 6px; }
+.invq-chip { background: var(--bg); border: 1.5px solid var(--border); border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: bold; color: var(--text-secondary); }
+.invq-chip.ok { color: var(--success); border-color: var(--success); }
+.invq-chip.fail { color: var(--danger); border-color: var(--danger); }
+.invq-chip.warn { color: var(--warning); border-color: var(--warning); }
+.invq-body { max-height: 52vh; overflow: auto; border: 1px solid var(--border); border-radius: 10px; padding: 4px 10px; -webkit-overflow-scrolling: touch; }
+.invq-sec { font-weight: bold; color: var(--primary-dark); font-size: 12.5px; border-bottom: 2px solid var(--primary-dark); padding: 8px 0 4px; }
+.invq-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 1px; border-bottom: 1px dashed var(--border); font-size: 12.5px; }
+.invq-row:last-child { border-bottom: none; }
+.invq-row.fail { background: rgba(239,68,68,.08); border-radius: 6px; }
+.invq-no { font-weight: bold; white-space: nowrap; }
+.invq-meta { color: var(--text-secondary); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.invq-st { font-weight: bold; white-space: nowrap; font-size: 11.5px; }
+.invq-st.ok { color: var(--success); }
+.invq-st.wait { color: var(--warning); }
+.invq-st.fail { color: var(--danger); }
+.invq-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.invq-empty { padding: 18px 6px; text-align: center; color: var(--text-secondary); }
+
+/* 💊 ميزان فارما — إدارة الصيدلية (إضافة مستقلة، بلا تغيير على شاشات ميزان) */
+.pharma-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 12px; }
+.pharma-tab { border: 1.5px solid var(--border); background: var(--bg); color: var(--text-secondary); border-radius: 999px; padding: 7px 16px; font-weight: bold; cursor: pointer; }
+.pharma-tab.active { background: var(--primary-dark); color: #fff; border-color: var(--primary-dark); }
+.pharma-panel { padding-bottom: 12px; }
+.pharma-card { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
+.pharma-card h3 { margin: 0 0 10px; font-size: 14px; color: var(--primary-dark); }
+.pharma-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px 12px; align-items: end; }
+.pharma-form label { font-size: 12px; font-weight: bold; color: var(--text-secondary); }
+.pharma-form input, .pharma-form select { width: 100%; min-height: 36px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+.pharma-check { display: flex; align-items: center; gap: 7px; min-height: 36px; }
+.pharma-check input { width: auto !important; min-height: 0 !important; }
+.pharma-status { margin-top: 10px; font-size: 12.5px; font-weight: bold; color: var(--primary-dark); }
+.pharma-table th, .pharma-table td { font-size: 12px; }
+.pharma-badge { display: inline-block; border-radius: 999px; padding: 2px 9px; font-size: 11px; font-weight: bold; white-space: nowrap; }
+.pharma-badge.ok { background: rgba(16,185,129,.14); color: var(--success); }
+.pharma-badge.soon { background: rgba(245,158,11,.16); color: var(--warning); }
+.pharma-badge.expired { background: rgba(239,68,68,.14); color: var(--danger); }
+.pharma-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.pharma-kpi { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.pharma-kpi b { display: block; font-size: 22px; color: var(--primary-dark); }
+.pharma-kpi span { font-size: 12px; color: var(--text-secondary); }
+@media (max-width: 860px) {
+  .pharma-form { grid-template-columns: 1fr 1fr; }
+  .pharma-tabs .pharma-tab { flex: 1 1 30%; padding: 7px 8px; font-size: 12px; }
+}
+@media print {
+  .pharma-print { direction: rtl; font-family: Cairo, sans-serif; }
+  .pharma-print h2 { text-align: center; margin: 0 0 12px; font-size: 17px; }
+  .pharma-print table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .pharma-print th, .pharma-print td { border: 1px solid #bbb; padding: 4px 6px; text-align: right; }
+  .pharma-print .pharma-print-meta { margin-bottom: 10px; font-size: 11px; }
+}

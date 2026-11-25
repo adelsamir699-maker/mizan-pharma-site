@@ -1,0 +1,1239 @@
+// ============================================================
+// ميزان - طبقة البيانات المركزية (Supabase)
+// أسلوب موفّر للاستهلاك:
+//  - تحميل انتقائي: جداول صغيرة فورًا، والكبيرة عند الطلب بالصفحات
+//  - حفظ فردي: السطر المتغيّر بس، مش الجدول كله كل مرة
+//  - أعمدة محددة للقوائم بدل جلب كل الحقول
+//  - تقارير بفترة زمنية (افتراضية: آخر 30 يوم)
+// ============================================================
+(function () {
+  "use strict";
+
+  var CFG = window.MIZAN_CONFIG || { url: "", anon: "" };
+  var ONLINE = !!(CFG.url && CFG.anon);
+  var sb = null;
+  var profile = null;
+  var orgRow = null;
+  var lastEmail = "";
+  var lastCreds = null;
+
+  /* ══════════════════════════════════════════════════════════════════
+     🔐 بناء 263 — «الحساب المفتوح على جهاز مينفعش يتفتح على جهاز تاني»
+     الفكرة: معرّف جهاز ثابت في المتصفح + جلسة على السحابة (ترقية ٧٢).
+     الجهاز اللي ماسك الحساب بيبعت نبضة كل ٤٥ ثانية؛ جهاز تاني يحاول يدخل
+     وهو لسه حيّ ⇒ بيرجع busy وتظهر له رسالة «هذا الحساب مفتوح على جهاز اخر الان».
+     الجلسة اللي بلا نبضة ١٢٠ ثانية بتبقى حرّة (تطبيق اتقفل/الشبكة قطعت).
+     فشل الشبكة أو غياب الدالة = **ما نقفلش الباب** (البرنامج يشتغل عادي).
+     ══════════════════════════════════════════════════════════════════ */
+  var DEVICE_KEY = "mizan_device_v1";
+  var BEAT_MS = 45000;
+  var sessionTimer = null;
+  var sessionUser = "";
+  var lastLoginBusy = false;
+  var sessionLostHandler = null;
+
+  function deviceId() {
+    var v = "";
+    try { v = localStorage.getItem(DEVICE_KEY) || ""; } catch (e) { }
+    if (!v) {
+      v = "d" + Date.now().toString(36) + "-" +
+        Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6);
+      try { localStorage.setItem(DEVICE_KEY, v); } catch (e) { }
+    }
+    return v;
+  }
+  function newSessionId() {
+    return "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  }
+  function usernameOfEmail(em) {
+    return String(em || "").replace(/@mizan\.app$/i, "").trim();
+  }
+  /* خطأ «الدالة مش موجودة» = الترقية ٧٢ لسه ما اتنفّذتش ⇒ ما نعطّلش الدخول */
+  function rpcAbsent(err) {
+    var m = String((err && (err.message || err.details || err.hint)) || "");
+    return (err && (err.code === "PGRST202" || err.code === "42883")) ||
+      /could not find the function|does not exist|schema cache/i.test(m);
+  }
+  function stopSessionBeat() {
+    if (sessionTimer) { clearInterval(sessionTimer); sessionTimer = null; }
+  }
+  function startSessionBeat(user, dev) {
+    stopSessionBeat();
+    sessionUser = user;
+    sessionTimer = setInterval(function () {
+      if (!sb) return;
+      sb.rpc("mizan_session_beat", { p_user: user, p_device: dev }).then(function (r) {
+        if (r.error) return;                       // شبكة/غياب الدالة ⇒ ما نخرجش
+        var v = r.data || {};
+        if (v.lost) {
+          stopSessionBeat();
+          try { if (typeof sessionLostHandler === "function") sessionLostHandler(); } catch (e) { }
+        }
+      }).catch(function () { });
+    }, BEAT_MS);
+  }
+  /* مطالبة بالحساب عند الدخول. بترجع {ok:true} أو {ok:false, busy:true} */
+  function sessionClaim(username) {
+    lastLoginBusy = false;
+    var u = String(username || "").trim();
+    if (!u || !sb) return Promise.resolve({ ok: true, skipped: true });
+    var dev = deviceId();
+    return sb.rpc("mizan_session_claim", { p_user: u, p_device: dev, p_session: newSessionId() })
+      .then(function (r) {
+        if (r.error) {
+          if (!rpcAbsent(r.error)) { try { console.warn("session claim:", r.error.message); } catch (e) { } }
+          return { ok: true, skipped: true };      // ما نقفلش الباب على فشل شبكة
+        }
+        var v = r.data || {};
+        if (v.busy) { lastLoginBusy = true; return { ok: false, busy: true }; }
+        startSessionBeat(u, dev);
+        return { ok: true };
+      })
+      .catch(function () { return { ok: true, skipped: true }; });
+  }
+  /* خروج صريح ⇒ تحرير الحساب فورًا (قبل signOut لأن الدالة محتاجة الجلسة) */
+  function sessionRelease() {
+    stopSessionBeat();
+    var u = sessionUser;
+    sessionUser = "";
+    if (!u || !sb) return Promise.resolve();
+    return sb.rpc("mizan_session_release", { p_user: u, p_device: deviceId() })
+      .then(function () { }, function () { });
+  }
+
+  // الجداول الصغيرة اللي تُحمَّل مرة واحدة عند الدخول
+  var EAGER = ["customers", "suppliers", "products", "treasury", "accounts",
+    "fixed_assets", "cashier_shifts", "car_trips", "checks"]; // 🆕 مهمة 98: الأصول الثابتة · 🧾 بناء 176: ورديات الكاشير · 🚚 بناء 178: رحلات سيارات المناديب · 🧾 بناء 190: الشيكات · 🌉 165: attendance/att_settings خارج المزامنة · 166: employees اتشال
+  // الجداول الكبيرة: تُحمَّل عند الطلب فقط
+  var LAZY = ["sales", "sale_items", "purchases", "purchase_items", "supplier_txs",
+    "vouchers", "journal_entries", "journal_lines", "audit_logs",
+    "sale_returns", "sale_return_items", "purchase_returns", "purchase_return_items"];
+  // 🆕 مهمة 98: جداول «اختيارية» — موجودة في EAGER لكن ممكن السحابة لسه ما تعرفهاش
+  // (ترحيل ٣٧ ما اتنفّذش بعد). لو تنزيلها فشل لازم يفضل جدول محلي فاضي،
+  // وما يخلّيش Promise.all كله يقع — عشان كده تحميل كل بيانات العميل ما يفشلش.
+  // 🧾 بناء 176: cashier_shifts اختياري كذلك (ترحيل ٥٤ لسه ما اتنفّذش).
+  // 🚚 بناء 178: car_trips اختياري كذلك (ترحيل ٥٥ لسه ما اتنفّذش).
+  var OPTIONAL_EAGER = ["fixed_assets", "cashier_shifts", "car_trips", "checks"];
+  function isOptionalEager(t) { return OPTIONAL_EAGER.indexOf(t) >= 0; }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // 🗑️ الدردشة اتلغت نهائيًا (بناء 224 واجهة/تشغيل، بناء 236 كود، ترقية ٦٨ قاعدة):
+  //    جدول `messages` اتحذف من السحابة، ومفيش أي جدول/مفتاح دردشة في أي قائمة فوق.
+  //    أي كود قديم بيلمس "messages" بقى ميت — الفحص الساكن بيمنع رجوعه.
+  // ═══════════════════════════════════════════════════════════════════════
+
+  var PAGE_SIZE = 500;
+  var MAX_PAGES = 5; // حد أقصى 2500 سطر للجداول الكبيرة (مع البحث/الترقيم)
+
+  function cacheKey(t) {
+    var uid = (profile && profile.id) || "anon";
+    var org = orgId() || "noorg";
+    return "mizan_db_" + uid + "_" + org + "_" + t;
+  }
+
+  function loadScript(src) {
+    return new Promise(function (res, rej) {
+      var s = document.createElement("script");
+      s.src = src;
+      s.onload = res;
+      s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  }
+
+  function ensureLib() {
+    if (window.supabase) return Promise.resolve();
+    var local = (window.location.origin || "") + "/lib_supabase.js";
+    var to = null, cdnPromise = null;
+    function fallback() {
+      if (!cdnPromise) {
+        cdnPromise = loadScript("https://unpkg.com/@supabase/supabase-js@2").catch(function () {
+          throw new Error("تعذّر تحميل مكتبة السحابة. تحقق من الإنترنت.");
+        });
+      }
+      return cdnPromise;
+    }
+    // 🧪 بناء 227: البلوك كان بيرمي وعد `fallback` جوه setTimeout (unhandled rejection).
+    // سباق صريح: المحلي أولًا، والـCDN بعد 15 ثانية أو فور فشل المحلي — بلا تحميل مكرر.
+    var timeout = new Promise(function (res, rej) {
+      to = setTimeout(function () { fallback().then(res, rej); }, 15000);
+    });
+    var localLoad = loadScript(local).then(function () {
+      clearTimeout(to);
+    }, function () {
+      clearTimeout(to);
+      return fallback();
+    });
+    return Promise.race([localLoad, timeout]);
+  }
+
+  function client() { return sb; }
+
+  function orgId() { return orgRow ? orgRow.id : null; }
+
+  function isOnline() { return ONLINE && !!sb; }
+
+  function init(cfg) {
+    if (cfg) { CFG = cfg; window.MIZAN_CONFIG = cfg; }
+    ONLINE = !!(CFG.url && CFG.anon);
+    if (!ONLINE) return false;
+    if (!window.supabase) return false;
+    // persistSession:false = الجلسة تفضل في ذاكرة الصفحة فقط.
+    // ده بيحل مشكلة معلّقة الدخول في المتصفح (قفل التخزين/الجلسة
+    // كان بيعلّق لحين forever لما بيتحفظ في localStorage عبر مكتبة supabase-js).
+    // الاستمرار بعد التحديث بيتعمل بتوكنات بنحفظها بنفسنا (autoLogin بالأسفل).
+    sb = window.supabase.createClient(CFG.url, CFG.anon, {
+      auth: { persistSession: false, autoRefreshToken: true }
+    });
+    return true;
+  }
+
+  // ---------- جلسة مستمرة عبر التحديث/إعادة الفتح (الموبايل) ----------
+  // بنحفظ توكنات Supabase في localStorage بنفسنا (بعيدًا عن قفل المكتبة)،
+  // وعند الفتح بنسترجع الجلسة بيهم — ولو انتهت صلاحية access بنجدده بـ refresh.
+  var SES_KEY = "mizan_session_v1";
+  function saveSessionTokens(session) {
+    try {
+      if (session && session.access_token && session.refresh_token) {
+        localStorage.setItem(SES_KEY, JSON.stringify({
+          a: session.access_token, r: session.refresh_token
+        }));
+      }
+    } catch (e) { }
+  }
+  function clearSessionTokens() {
+    try { localStorage.removeItem(SES_KEY); } catch (e) { }
+  }
+  function autoLogin() {
+    var raw = null;
+    try { raw = localStorage.getItem(SES_KEY); } catch (e) { }
+    if (!raw) return Promise.resolve(false);
+    var tok = null;
+    try { tok = JSON.parse(raw); } catch (e) { }
+    if (!tok || !tok.a || !tok.r) { clearSessionTokens(); return Promise.resolve(false); }
+    return ensureLib().then(function () {
+      if (!sb) init();
+      if (!sb) return false;
+      return sb.auth.setSession({ access_token: tok.a, refresh_token: tok.r }).then(function (r) {
+        if (r.error || !r.data || !r.data.session) { clearSessionTokens(); return false; }
+        saveSessionTokens(r.data.session); // التوكنات بتتجدد — نخزن أحدث نسخة
+        lastCreds = null; // مش محتاجين باسورد مخزن في الذاكرة
+        // 🔐 بناء 263: تحديث الصفحة/إعادة الفتح على **نفس الجهاز** يعدّي عادي،
+        // لكن لو الحساب ماسكه جهاز تاني ⇒ ما ندخلش ونرجّع شاشة الدخول بالرسالة.
+        var uname = usernameOfEmail(r.data.session.user && r.data.session.user.email);
+        return sessionClaim(uname).then(function (st) {
+          if (st && st.busy) { clearSessionTokens(); return sb.auth.signOut().then(function () { return false; }, function () { return false; }); }
+          return loadProfile().then(function () { return true; })
+            .catch(function () { clearSessionTokens(); return false; });
+        });
+      }).catch(function () { clearSessionTokens(); return false; });
+    });
+  }
+
+  // ---------- الدخول (باسم المستخدم، وSupabase بيشوف إيميل وهمي ورا الكواليس) ----------
+  function toEmail(username) {
+    return (username || "").trim().toLowerCase().replace(/[^a-z0-9._-]/g, "") + "@mizan.app";
+  }
+
+  function login(username, pass) {
+    return ensureLib().then(function () {
+      if (!sb) init();
+      if (!sb) throw new Error("لا يوجد إعداد اتصال");
+      return sb.auth.signInWithPassword({ email: toEmail(username), password: pass }).then(function (r) {
+        if (r.error) throw r.error;
+        lastCreds = { username: username, pass: pass };
+        saveSessionTokens(r.data.session); // للاسترجاع التلقائي بعد التحديث/إعادة الفتح
+        // 🔐 بناء 263: نفس الحساب ممنوع يبقى مفتوح على جهازين في نفس الوقت
+        return sessionClaim(username).then(function (st) {
+          if (st && st.busy) {
+            var be = new Error("هذا الحساب مفتوح على جهاز اخر الان");
+            be.busy = true;
+            lastCreds = null;
+            clearSessionTokens();
+            return sb.auth.signOut().then(function () { throw be; }, function () { throw be; });
+          }
+          return loadProfile().then(function () { return true; });
+        });
+      });
+    });
+  }
+
+  /* 🔐 بناء 269 (طلب المالك: «يطلب الرقم السرى لصاحب المؤسسه للموافقه على تعديل
+     حمولة الرحلة»): تأكيد كلمة السر الحالية للحساب المفتوح — **تأكيد فقط**.
+     - بيستخدم إيميل الحساب الحالي (`lastEmail`) مش أي اسم مستخدم مكتوب في الشاشة
+       ⇒ لو حد كتب كلمة سر حساب تاني، الطلب بيفشل (الإيميل ثابت في النداء).
+     - مفيش تغيير لكلمة السر، ومفيش أي كتابة على أي جدول. التوكنات الجديدة
+       بتتخزن بس عشان الجلسة تفضل شغالة بعد التحديث.
+     - أوفلاين/بلا جلسة ⇒ `{ok:false, offline:true}` (ما بنقبلش تعديل بلا تأكيد). */
+  function verifyPassword(pass) {
+    var p = String(pass == null ? "" : pass);
+    if (!p) return Promise.resolve({ ok: false, empty: true });
+    if (!lastEmail) return Promise.resolve({ ok: false, offline: true });
+    return ensureLib().then(function () {
+      if (!sb) init();
+      if (!sb) return { ok: false, offline: true };
+      return sb.auth.signInWithPassword({ email: lastEmail, password: p }).then(function (r) {
+        if (r.error || !r.data || !r.data.session) return { ok: false, wrong: true };
+        saveSessionTokens(r.data.session);
+        return { ok: true };
+      }, function () { return { ok: false, offline: true }; });
+    }, function () { return { ok: false, offline: true }; });
+  }
+
+  /* 🛡 بناء 141 — «مافيش تسجيل ذاتي خالص»: الدالة `signup` (اللي كانت بتنادي `sb.auth.signUp`)
+     كانت **ميتة** (صفر نداء في `app.js` — الحسابات بتتعمل من لوحة المالك `mizan_admin_create_user`
+     أو من شاشة «حسابات شركتك» لصاحبها)، فتم حذفها من الملف ومن قايمة التصدير:
+     الحزمة المنشورة مافيهاش ولا سطر بيبعت طلب تسجيل حساب جديد للسحابة
+     ⇒ بقايا الكود ما تبقىش بابًا لو بوابة التسجيل العام في لوحة Supabase رجعت مفتوحة.
+     قرار المالك الحرفي (04/10): «علشان محدش يعمل حسابات تجريبية». */
+
+  // الدخول ناجح ومفيش ملف/شركة لسه ⇒ الصفحة توري **شاشة رمز الدعوة** (`orgScreen`) —
+  // ومافيش إنشاء شركة من هنا خالص من بناء 141 (القرار: «علشان محدش يعمل حسابات تجريبية»).
+  function loadProfile() {
+    return sb.auth.getUser().then(function (gu) {
+      if (gu.error || !gu.data.user) throw gu.error || new Error("لا يوجد مستخدم");
+      lastEmail = gu.data.user.email || lastEmail;
+      return sb.from("profiles").select("*").eq("id", gu.data.user.id).maybeSingle().then(function (p) {
+        if (p.error) throw p.error;
+        profile = p.data || null;
+        if (profile) {
+          return sb.from("organizations").select("*").eq("id", profile.org_id).maybeSingle().then(function (o) {
+            if (o.error) throw o.error;
+            orgRow = o.data || null;
+            return orgRow;
+          });
+        }
+        return null;
+      });
+    });
+  }
+
+  // فحص وجود جلسة حقيقية قبل أي RPC يكتب ملفات/شركات (يمنع خطأ NULL id)
+  function requireSession() {
+    // getUser() بيجيب الجلسة من ذاكرة العميل (شغال مع persistSession:false)
+    return sb.auth.getUser().then(function (s) {
+      if (s.error || !s.data || !s.data.user) {
+        var e = new Error("لا توجد جلسة دخول. أعد تسجيل الدخول ثم أعد المحاولة.");
+        e.noSession = true;
+        throw e;
+      }
+      return s.data.user;
+    });
+  }
+
+  // إعادة الدخول تلقائيًا لو الجلسة انقطعت بعد التسجيل (بيحل ضياع الجلسة)
+  function reloginThen(fn) {
+    return new Promise(function (resolve, reject) {
+      var done = false;
+      var to = setTimeout(function () {
+        if (done) return;
+        done = true;
+        reject(new Error("تعذّر الاتصال بالخادم. تحقق من الإنترنت وحاول مرة أخرى."));
+      }, 20000);
+      function finish(p) {
+        if (done) return;
+        done = true;
+        clearTimeout(to);
+        resolve(p);
+      }
+      function fail(e) {
+        if (done) return;
+        done = true;
+        clearTimeout(to);
+        reject(e);
+      }
+      requireSession().then(function () {
+        finish(fn());
+      }).catch(function (e) {
+        if (!e.noSession || !lastCreds) { fail(e); return; }
+        sb.auth.signInWithPassword({ email: toEmail(lastCreds.username), password: lastCreds.pass }).then(function (r) {
+          if (r.error) { fail(r.error); return; }
+          saveSessionTokens(r.data.session);
+          finish(fn());
+        }).catch(fail);
+      });
+    });
+  }
+
+  /* 🎟️ بناء 141 — «قفل التسجيل»: دالة `createOrg` (اللي بتنادي `create_org_and_profile`) اتشالت من الملف كله:
+     قرار المالك الحرفي (04/10): «علشان محدش يعمل حسابات تجريبية» + «و بعدين اربط الدعوه منى انا».
+     ⇒ الحزمة المنشورة مافيهاش ولا نداء لـ `create_org_and_profile`، وأي حساب جديد
+     بياخد رمز دعوة من المالك أو من مساعِديه (أعضاء شركة «ميزان») ويكتبه عند الدخول.
+     إنشاء الشركات يفضل من مسارين بس: لوحة المالك (`mizan_admin_create_org`)، والترقية ٥٠
+     اللي بتقفل الدالة العامة على نفس النطاقين — **و٥٠ اتنفّذت على السحابة ٥/١٠ ≈01:29**
+     بأمر المالك الحرفي «تمام ابدا فعلها على قاعدة البيانات» (الإثبات السلوكي 82✓/0✗). */
+
+  // الانضمام لشركة برمز دعوة
+  function joinOrg(code, name) {
+    return reloginThen(function () {
+      return sb.rpc("join_org", { p_code: code, p_name: name || "" }).then(function (r) {
+        if (r.error) throw r.error;
+        return loadProfile();
+      });
+    });
+  }
+
+  function logout() {
+    // 🔐 بناء 263: تحرير الحساب على السحابة **قبل** إنهاء الجلسة
+    return sessionRelease().then(function () {
+      return (sb ? sb.auth.signOut() : Promise.resolve());
+    }).then(function () {
+      // 🛡 تنظيف هوية الحساب بالكامل: ما يفضلش بقايا صلاحيات/باسورد
+      // من حساب سابق تُستخدم لو دخل حساب تاني في نفس المتصفح
+      profile = null; orgRow = null;
+      access = null; lastCreds = null; lastEmail = "";
+      clearSessionTokens(); // خروج = نهاية الجلسة المستمرة
+    });
+  }
+
+  // ---------- الجداول الصغيرة (تحميل فورًا + كاش) ----------
+  // 🆕 بناء 209 (بند 16): كل قراءة مقصورة على شركة الحساب — ولو السحابة سمحت
+  // بقراءة شركة تانية لأي سبب (سياسة/دور)، الجهاز ما يسحبهاش أصلًا.
+  function scoped(q) {
+    var o = orgId();
+    return o ? q.eq("org_id", o) : q;
+  }
+
+  /* 🧱 بناء 242 — «ممنوع قراءة جدول كامل في طلب واحد» (السبب الجذري لشريط
+   * «⏳ 271 تعديل لسه ما وصلش للسحابة» ولـ«أصناف محفوظة ومفيش على اللاب»).
+   * القياس: Supabase/PostgREST بترجع **1000 سطر بالكثير في الطلب الواحد** من غير ما
+   * declare عن نفسها بخطأ. وعلى قاعدة المالك (أداة read_pending_b5.js، قراءة + rollback):
+   * أصناف «الامانة» = 1269 وأصناف «محمد رافت» = 1269 · `local_id` فاضي = 0 · مكرر = 0.
+   * ⇒ أي `select()` بلا `range` كان بيسلّم أول 1000 ويرجع الباقي «مفيش»:
+   *   (أ) أي جهاز ما بيُنزّلش الـ269 صنفًا التانيين خالص،
+   *   (ب) و`CLOUD.listLocalIds` (بناء 241) بتخُدهم «ما اترفعوش» فترميهم في الطابور كل
+   *       `HEAL_MS` (٥ دقايق) للأبد ⇒ الشريط ما بيصفّي + ~269×288 ≈ 77 ألف سطر
+   *       بيتبعتوا تاني كل يوم على الجهاز الواحد.
+   * القاعدة الجديدة: ترقيم زي `loadLazy` بالظبط (ترتيب كامل التحديد + `range`) **لحد صفحة
+   * ناقصة** — ونحنا بنطلب 500 بالظبط، فـ«سقف الـ1000» ما بيقدرش يقص أي صفحة.
+   * الترتيب لازم كامل التحديد: `created_at` بييتساوى في الاستيراد بالجملة (نفس الثانية)
+   * ⇒ الصفحات بتزح وتكرّر/تفوّت، فاللافق `local_id` وراها.
+   * لو خلصت مساحة الصفحات (`READ_MAX_PAGES`) والصفحة لسه كاملة = قراءة **ناقصة** فعلمناها
+   * `mizanIncomplete`؛ اللي يقرأها ياخد قراره (`listLocalIds` بترجع null ⇒ الطابور ما يتلمسش).
+   * صفر كتابة في أي مسار هنا — قراءة بس. */
+  var READ_PAGE = 500;
+  var READ_MAX_PAGES = 40; // 20000 سطر للجدول (مقيس: أكبر جدول عندنا دلوقتي = 1269)
+
+  // opts = { select, order:[[col,asc]], eq:[[col,val]], pageSize, maxPages, strictOrg, orgScoped }
+  function readComplete(table, opts) {
+    opts = opts || {};
+    var sel = opts.select || "*";
+    var order = opts.order || [["created_at", true], ["local_id", true]];
+    var pageSize = opts.pageSize || READ_PAGE;
+    var maxPages = opts.maxPages == null ? READ_MAX_PAGES : opts.maxPages;
+    var rows = [];
+    var page = 0;
+
+    function markIncomplete(list) {
+      try { list.mizanIncomplete = true; } catch (e) { }
+      try { list.mizanReadPages = page; } catch (e) { }
+      return list;
+    }
+    function onePage() {
+      // العدد الصريح في أول نبضة بس — للكن الإكمال بيتحقق بـ«صفحة ناقصة»، فالعدّاد هنا
+      // تشخيص مش حُكم (ولو السحابة ما رجّعتهوش الحياة ما بتقعش).
+      var base = sb.from(table).select(sel, page === 0 ? { count: "exact" } : {});
+      // الحصر على شركة الجلسة هو الافتراضي (Scoped selection = default) — نفس `scoped` القديمة
+      var q = opts.orgScoped === false ? base : scoped(base);
+      if (opts.eq) { opts.eq.forEach(function (c) { q = q.eq(c[0], c[1]); }); }
+      order.forEach(function (o) { q = q.order(o[0], { ascending: o[1] !== false }); });
+      return q.range(page * pageSize, page * pageSize + pageSize - 1).then(function (res) {
+        if (res.error) throw res.error;
+        var data = res.data || [];
+        rows = rows.concat(data);
+        page++;
+        return data.length === pageSize;
+      });
+    }
+    function loop() {
+      return onePage().then(function (wasFull) {
+        if (!wasFull) return rows;                    // صفحة ناقصة = Ended (دليل الانتهاء)
+        if (page >= maxPages) return markIncomplete(rows); // سقف صفحات والصفحة لسه كاملة
+        return loop();
+      });
+    }
+    if (opts.strictOrg && !orgId()) {
+      var e = new Error("ما فيش شركة محدّدة: القراءة المحصورة مستحيلة");
+      e.mizanNoOrg = true;
+      return Promise.reject(e);
+    }
+    return Promise.resolve().then(loop);
+  }
+
+  function loadEager() {
+    var tasks = EAGER.map(function (t) {
+      return readComplete(t).then(function (res) {
+        try { localStorage.setItem(cacheKey(t), JSON.stringify(res)); } catch (e) { }
+        return res;
+      }).catch(function (err) {
+        // 🆕 مهمة 98: جدول اختياري مالوش وجود على السحابة لسه = فاضي، مش فشل تحميل
+        if (isOptionalEager(t)) return [];
+        throw err;
+      });
+    });
+    return Promise.all(tasks).then(function (lists) {
+      var out = {};
+      EAGER.forEach(function (t, i) { out[t] = lists[i]; });
+      return out;
+    });
+  }
+  function eagerCache(t) {
+    try { return JSON.parse(localStorage.getItem(cacheKey(t)) || "null"); } catch (e) { return null; }
+  }
+
+  function loadEagerAll() {
+    // 🧱 بناء 242: نفس قراءة `loadEager` بالترقيم — والقرار نفسه (الجدول الاختياري
+    // المفقود = فاضي، وأي زعلة تانية ترفع الخطأ). راجع فوق عند readComplete.
+    var tasks = EAGER.map(function (t) {
+      return readComplete(t).then(function (res) {
+        return [t, res];
+      }).catch(function (err) {
+        if (isOptionalEager(t)) return [t, []];
+        throw err;
+      });
+    });
+    return Promise.all(tasks).then(function (pairs) {
+      var out = {};
+      pairs.forEach(function (p) { out[p[0]] = p[1]; });
+      return out;
+    });
+  }
+
+  // عدد السطور الفعلية في الجدول (من غير قراءتها) — للتحقق قبل رفع بيانات تجريبية
+  function countRows(t) {
+    return sb.from(t).select("*", { count: "exact", head: true }).then(function (r) {
+      if (r.error) throw r.error;
+      return r.count || 0;
+    });
+  }
+
+  // ---------- الجداول الكبيرة (تحميل عند الطلب بالصفحات) ----------
+  function loadLazy(table, opts) {
+    opts = opts || {};
+    var sel = opts.select || "*";
+    // الجداول الكبيرة: الترتيب الثابت مهم جداً لو الصفحة اتقسمت على أكتر من طلب
+    // (من غير ORDER BY ثابت نتأكد إن الـ range مش هيكرر سطر ولا يفوّت سطر بين الصفحات).
+    // بعض الجداول (أسطر الأصناف والأسطر المحاسبية) مالهاش created_at → نرتب بـ local_id.
+    var BIG_DATE_COLS = {
+      customers: "created_at", suppliers: "created_at", products: "created_at",
+      sales: "created_at", purchases: "created_at", vouchers: "created_at",
+      journal_entries: "created_at", sale_returns: "created_at", purchase_returns: "created_at",
+      customer_txs: "created_at", supplier_txs: "created_at", accounts: "created_at",
+      treasury: "created_at", organizations: "created_at", settings: "created_at"
+    };
+    // جداول بلا created_at وبلا doc_date → الترتيب الوحيد المستقر هو local_id
+    var LOCAL_ID_ORDER = {
+      sale_items: 1, purchase_items: 1, journal_lines: 1,
+      sale_return_items: 1, purchase_return_items: 1
+    };
+    var order = opts.order ||
+      (LOCAL_ID_ORDER[table] ? { col: "local_id", dir: "asc" }
+        : { col: BIG_DATE_COLS[table] || "created_at", dir: "desc" });
+    var pages = opts.maxPages || MAX_PAGES;
+    var rows = [];
+    var rangeStart = 0;
+
+    function buildOnePage() {
+      var b = sb.from(table).select(sel);
+      if (opts.eq) { opts.eq.forEach(function (c) { b = b.eq(c[0], c[1]); }); }
+      if (opts.filter) { b = b.or(opts.filter); }
+      if (opts.from !== undefined) b = b.gte(order.col, opts.from);
+      if (opts.to !== undefined) b = b.lte(order.col, opts.to);
+      return b.order(order.col, { ascending: order.dir === "asc" })
+        .range(rangeStart, rangeStart + PAGE_SIZE - 1).then(function (res) {
+          if (res.error) throw res.error;
+          var data = res.data || [];
+          rows = rows.concat(data);
+          return data.length === PAGE_SIZE;
+        });
+    }
+
+    var step = 0;
+    function loop() {
+      if (step >= pages) return rows;
+      return buildOnePage().then(function (full) {
+        step++;
+        if (!full || step >= pages) return rows;
+        rangeStart += PAGE_SIZE;
+        return loop();
+      });
+    }
+    return loop();
+  }
+
+  // ---------- الحفظ الموفر (السطر الفردي) ----------
+  function saveRow(table, row) {
+    if (!row.id) row.id = crypto.randomUUID();
+    if (!row.org_id) row.org_id = orgId();
+    return sb.from(table).upsert(row, { onConflict: "id" }).then(function (r) {
+      if (r.error) throw r.error;
+      return r.data;
+    });
+  }
+  function saveRows(table, rows) {
+    if (!rows || !rows.length) return Promise.resolve([]);
+    var o = orgId();
+    rows.forEach(function (r) {
+      if (!r.id || !r.id.length) r.id = (crypto.randomUUID && crypto.randomUUID());
+      if (!r.org_id) r.org_id = o;
+    });
+    return sb.from(table).upsert(rows, { onConflict: "id" }).then(function (r) {
+      if (r.error) throw r.error;
+      return r.data;
+    });
+  }
+  function remove(table, id) {
+    return sb.from(table).delete().eq("id", id).then(function (r) {
+      if (r.error) throw r.error;
+      return true;
+    });
+  }
+  // حذف سطور كبيرة تابعة (مثل items) بالمعرّف الأب
+  function removeWhere(table, col, val) {
+    return sb.from(table).delete().eq(col, val).then(function (r) {
+      if (r.error) throw r.error;
+      return true;
+    });
+  }
+
+  function me() { return profile; }
+  function email() { return lastEmail; }
+  function org() { return orgRow; }
+  function getProfile() { return profile; }
+
+  // ---- حالة الوصول (الوقت/القفل/المزايا) من القاعدة ----
+  var access = null; // allowed, reason, role, org_id, org_name, plan_start, plan_end, locked, blocked, is_superadmin, features
+  // 🛡 بناء 127 (تمهيد التصحيح ٤٩): تفرّق بين «القاعدة ردّت ورفضت» و«ما قدرناش نسأل».
+  //   denied      = رجع لنا رد من Postgres/PostgREST (مثلاً 42501 بعد سحب المنح)
+  //   unreachable = الـ fetch نفسه فشل (النت واقع / السيرفر مشغول) — ده مش قرار من السحابة
+  // ليه: شاشة «لا يمكنك الدخول» كانت بتظهر للعميل لمجرد إن النت قطع، وده كان هيخلي
+  // أي سحب منح (تصحيح ٤٩) خطرًا — الفشل يجب يوصل رسالة «جرّب تاني» على شاشة الدخول.
+  function mizanAskErr(err, kind) {
+    var e = new Error((err && (err.message || err.details)) || String(err || "تعذّر التحقق من الصلاحية"));
+    e.mizanAsk = kind;
+    e.mizanCode = (err && err.code) || null;
+    return e;
+  }
+  function mizanAskTransport(err) {
+    var m = String((err && (err.message || err.code)) || err || "");
+    return /failed to fetch|fetch failed|network|networkerror|econn|etimedout|enotfound|enf|offline|load fail|fetch is not defined/i.test(m);
+  }
+  // requestAccess يُستدعى فورًا بعد الدخول قبل فتح الشاشات
+  function requestAccess() {
+    var pr;
+    try { pr = sb.rpc("mizan_access"); }
+    catch (e) { return Promise.reject(mizanAskErr(e, mizanAskTransport(e) ? "unreachable" : "denied")); }
+    return pr.then(function (r) {
+      if (r && r.error) throw mizanAskErr(r.error, mizanAskTransport(r.error) ? "unreachable" : "denied");
+      // الدالة بترجع مصفوفة من صف واحد أحيانًا → نظيّرها لكائن
+      var d = r.data;
+      if (Array.isArray(d)) d = d[0] || null;
+      access = d || null;
+      if (access && access.org_id) {
+        // نحدّث الشركة الحالية المعروضة في التطبيق
+        orgRow = { id: access.org_id, name: access.org_name };
+      }
+      return access;
+    }, function (e) {
+      // رفض من الشبكة نفسه (أو خطأ طالع من فوق) ⇒ نصنّفه من جديد بلا ما نفقد التصنيف القديم
+      if (e && e.mizanAsk) throw e;
+      throw mizanAskErr(e, mizanAskTransport(e) ? "unreachable" : "denied");
+    });
+  }
+  function accessInfo() { return access; }
+  // هل الميزة مفعلة للشركة الحالية؟
+   function featureEnabled(key) {
+      if (!access) return true;
+      if (access.locked || access.reason !== "ok") return false;
+      var f = access.features || {};
+      return f[key] !== false;
+   }
+
+   // القيمة الخام للصلاحية: true / false / undefined (غير محدَّدة)
+   // تُستخدم للصلاحيات التي يجب أن تكون «مفعّلة صريحًا» (opt-in).
+   function featureFlag(key) {
+      if (!access) return undefined;
+      var f = access.features || {};
+      return f[key];
+   }
+
+  // ---- مستندات العملاء/الموردين (build 105) ----
+  function docAdd(partyType, partyId, partyCode, fileName, ext, rel, type, size) {
+    return sb.rpc("mizan_add_doc", {
+      p_party_type: partyType, p_party_id: partyId, p_party_code: partyCode,
+      p_file_name: fileName, p_ext: ext, p_rel: rel, p_type: type, p_size: size
+    }).then(function (r) { if (r.error) throw r.error; return r.data; });
+  }
+  function docList(partyType, partyCode) {
+    return sb.rpc("mizan_list_docs", { p_party_type: partyType || null, p_party_code: partyCode || null })
+      .then(function (r) { if (r.error) throw r.error; return r.data || []; });
+  }
+  function docDel(docId) {
+    return sb.rpc("mizan_del_doc", { p_doc: docId }).then(function (r) { if (r.error) throw r.error; return r.data; });
+  }
+  function codeRetire(partyType, code) {
+    return sb.rpc("mizan_retire_code", { p_party_type: partyType, p_code: code }).then(function (r) { if (r.error) throw r.error; return true; });
+  }
+  function codeListRetired(partyType) {
+    return sb.rpc("mizan_list_retired", { p_party_type: partyType }).then(function (r) { if (r.error) throw r.error; return r.data || []; });
+  }
+  function codeNext(partyType) {
+    return sb.rpc("mizan_next_code", { p_party_type: partyType }).then(function (r) { if (r.error) throw r.error; return r.data; });
+  }
+
+  // ---- دوال المالك (إدارة الشركات والوقت والأعضاء) ----
+  function adminOrgs() {
+    return sb.rpc("mizan_admin_orgs").then(function (r) {
+      if (r.error) throw r.error;
+      return r.data || [];
+    });
+  }
+  // بناء 131: قراءة مزايا كل شركة الخام (public.organizations.features).
+  // ليه؟ `mizan_admin_orgs` ما بترجّعمش، وكان ده السبب إن نافذة «⚙️ المزايا»
+  // بتفتح وكل الصلاحيات معلّمة من جديد ⇒ تحديد المالك يبان «رجع كل الصلاحيات».
+  // القراءة دي سليمة أمانًا: سياسة `org_select` بتسمح لـ `is_superadmin` بكل الصفوف
+  // (ومحدودة على `current_org()` لباقي الحسابات)، وهي **قراءة فقط** — مافيش أي تنفيذ.
+  function adminOrgFeatures() {
+    return sb.from("organizations").select("id, features").then(function (r) {
+      if (r.error) throw r.error;
+      return r.data || [];
+    });
+  }
+  function adminMembers(orgId) {
+    return sb.rpc("mizan_admin_members", { p_org_id: orgId }).then(function (r) {
+      if (r.error) throw r.error;
+      return r.data || [];
+    });
+  }
+
+  /* 🎟️ بناء 141 — «قفل التسجيل + رمز الدعوة العشوائي» (قرار المالك 04/10):
+     أي حساب جديد بياخد رمزه من المالك أو من مساعِديه (أعضاء شركة «ميزان»)، والعميل
+     بيكتب الرمز عند الدخول. `mizan_admin_orgs()` ما بترجّعش `invite_code`، فبنقراه من
+     مصدرين بالترتيب ده:
+       (١) `mizan_admin_invite_codes()` — دالة definer بتدي القايمة كاملة للمالك **ولمساعديه**
+           (أعضاء شركة «ميزان»): دي من ترقية ٥٠ و**اتنفّذت على السحابة ٥/١٠ ≈01:29** بأمر المالك
+           الحرفي «تمام ابدا فعلها على قاعدة البيانات» ⇒ ده المسار الحيّ، و`via:"rpc"`.
+       (٢) رجوع لقراءة `organizations` مباشرة: سياسة `org_select` الموجودة على القاعدة الحيّة
+           بتسمح لـ `is_superadmin` بكل الصفوف، وبتدي أي حساب تاني **صفّ شركته هو بس**
+           ⇒ يفضل **مسار أمان** لسيرفر/قاعدة لسه ما تطبقتش عليها ٥٠ (سيرفر جديد ياخد الترقية
+           من `DEPLOY_DB_FILES`)، مش الحالة الحيّة. وهي **قراءة فقط** زي `adminOrgFeatures`. */
+  function fnMissingErr(e) {
+    if (!e) return false;
+    var c = String(e.code || e["pg-code"] || e.pgcode || "");
+    var m = String(e.message || "");
+    return c === "PGRST202" || c === "42883" || c === "PGRST102" ||
+      /could not find the function/i.test(m) || /does not exist/i.test(m) || /is not recognised/i.test(m);
+  }
+  function adminInviteCodes() {
+    var norm = function (rows) {
+      return (rows || []).map(function (x) {
+        return {
+          org_id: x.org_id || x.id || null,
+          org_name: x.org_name || x.name || "",
+          invite_code: x.invite_code || "",
+          plan_status: x.plan_status || "active"
+        };
+      }).filter(function (x) { return x.org_id; });
+    };
+    return sb.rpc("mizan_admin_invite_codes").then(function (r) {
+      if (!r.error) return { rows: norm(r.data), via: "rpc" };
+      if (!fnMissingErr(r.error)) throw r.error;
+      return sb.from("organizations").select("id, name, invite_code, plan_status")
+        .order("created_at", { ascending: false })
+        .then(function (o) {
+          if (o.error) throw o.error;
+          return { rows: norm(o.data), via: "table" };
+        });
+    });
+  }
+  // توليد رمز عشوائي جديد لشركة: كتابة على `organizations.invite_code` — ودي بس بتتم من
+  // دالة definer (الترقية ٥٠ — اتنفّذت ٥/١٠). أي سيرفر/قاعدة لسه ما طبّقتها بنرجّع
+  // `unavailable` بدل ما نكذب ونقول «تم» (مسار أمان بس، مش الحالة الحيّة).
+  function adminRotateInvite(orgId) {
+    return sb.rpc("mizan_admin_rotate_invite", { p_org_id: orgId }).then(function (r) {
+      if (!r.error) return { code: r.data || "", unavailable: false };
+      if (fnMissingErr(r.error)) return { code: "", unavailable: true };
+      throw r.error;
+    });
+  }
+  function adminSetOrg(orgId, planStart, planEnd, locked, features) {
+    return sb.rpc("mizan_admin_set_org", {
+      p_org_id: orgId,
+      p_plan_start: planStart || null,
+      p_plan_end: planEnd || null,
+      p_locked: locked,
+      p_features: features || null
+    }).then(function (r) {
+      if (r.error) throw r.error;
+      return true;
+    });
+  }
+  // build 103: حفظ اشتراك شركة (خطة/تواريخ/سعر يدوي/فك قفل) للمالك فقط
+  function adminSetSub(orgId, planStart, planEnd, planLabel, price, unlock) {
+    return sb.rpc("mizan_admin_set_sub", {
+      p_org_id: orgId,
+      p_plan_start: planStart || null,
+      p_plan_end: planEnd || null,
+      p_plan: planLabel || null,
+      p_price: (price === "" || price == null) ? null : Number(price),
+      p_unlock: unlock ? true : null
+    }).then(function (r) {
+      if (r.error) throw r.error;
+      return true;
+    });
+  }
+  function getSubPlans() {
+    return sb.rpc("mizan_get_subs_plans").then(function (r) {
+      if (r.error) throw r.error;
+      return r.data || null;
+    });
+  }
+  function setSubPlans(plans) {
+    return sb.rpc("mizan_set_subs_plans", { p_plans: plans }).then(function (r) {
+      if (r.error) throw r.error;
+      return true;
+    });
+  }
+  function adminSetUser(userId, blocked) {
+    return sb.rpc("mizan_admin_set_user", { p_user_id: userId, p_blocked: blocked }).then(function (r) {
+      if (r.error) throw r.error;
+      return true;
+    });
+  }
+  function adminCreateOrg(orgName, username, password, maxMembers) {
+    return sb.rpc("mizan_admin_create_org", {
+      p_org_name: orgName,
+      p_admin_username: username,
+      p_admin_password: password,
+      p_max_members: maxMembers || 5
+    }).then(function (r) {
+      if (r.error) throw r.error;
+      var d = r.data;
+      return Array.isArray(d) ? d[0] : d;
+    });
+  }
+  function adminCreateUser(orgId, username, password, fullName, role) {
+    return sb.rpc("mizan_admin_create_user", {
+      p_org_id: orgId,
+      p_username: username,
+      p_password: password,
+      p_full_name: fullName || null,
+      p_role: role || "member"
+    }).then(function (r) {
+      if (r.error) throw r.error;
+      var d = r.data;
+      return Array.isArray(d) ? d[0] : d;
+    });
+  }
+  function adminResetPassword(userId, newPassword) {
+    return sb.rpc("mizan_admin_reset_password", { p_user_id: userId, p_new_password: newPassword }).then(function (r) {
+      if (r.error) throw r.error;
+      return true;
+    });
+  }
+  function adminDeleteOrg(orgId, mode) {
+    return sb.rpc("mizan_admin_delete_org", { p_org_id: orgId, p_mode: mode }).then(function (r) {
+      if (r.error) throw r.error;
+      var d = r.data;
+      return Array.isArray(d) ? (d[0] || null) : d;
+    });
+  }
+  function adminDeleteMember(userId) {
+    return sb.rpc("mizan_admin_delete_member", { p_user_id: userId }).then(function (r) {
+      if (r.error) throw r.error;
+      var d = r.data;
+      return Array.isArray(d) ? (d[0] || null) : d;
+    });
+  }
+  function adminEditOrg(orgId, orgName, maxMembers, phone) {
+    return sb.rpc("mizan_admin_edit_org", {
+      p_org_id: orgId,
+      p_org_name: orgName || null,
+      p_max_members: maxMembers || null,
+      p_phone: phone || null
+    }).then(function (r) {
+      if (r.error) throw r.error;
+      return true;
+    });
+  }
+  function adminSetUsername(userId, username) {
+    return sb.rpc("mizan_admin_set_username", { p_user_id: userId, p_username: username }).then(function (r) {
+      if (r.error) throw r.error;
+      return true;
+    });
+  }
+
+  // ---- دوال شركة العميل: إدارة الحسابات الفرعية (الموظفين) ----
+  // معلومات شاشة «حسابات شركتي»: الاسم + الحد الأقصى + العدد الحالي + هل أنا مالك الشركة
+  function orgInfo() {
+    return sb.rpc("mizan_org_info").then(function (r) {
+      if (r.error) throw r.error;
+      var d = r.data;
+      return Array.isArray(d) ? (d[0] || null) : (d || null);
+    });
+  }
+  // قائمة الحسابات التابعة لشركتي (مالك الشركة أو عادل مالك البرنامج)
+  function orgMembers(orgId) {
+    return sb.rpc("mizan_org_members", { p_org_id: orgId }).then(function (r) {
+      if (r.error) throw r.error;
+      return r.data || [];
+    });
+  }
+  // تسجيل بيانات حساب الموظف المُنشأ حتى تصل للمالك (سوبر أدمن)
+  function logCreatedAccount(orgId, username, password, fullName, features) {
+    return sb.rpc("mizan_log_created_account", {
+      p_org_id: orgId,
+      p_username: username,
+      p_password: password,
+      p_full_name: fullName || null,
+      p_features: features || null
+    }).then(function (r) {
+      if (r.error) throw r.error;
+      return r.data;
+    });
+  }
+  // المالك: كل السجل / سجل شركة واحدة
+  function adminCreatedAccounts(orgId) {
+    return sb.rpc("mizan_admin_created_accounts", { p_org_id: orgId || null }).then(function (r) {
+      if (r.error) throw r.error;
+      return r.data || [];
+    });
+  }
+  function adminDeleteCreatedAccount(id) {
+    return sb.rpc("mizan_admin_delete_created_account", { p_id: id }).then(function (r) {
+      if (r.error) throw r.error;
+      return true;
+    });
+  }
+  // إضافة حساب فرعي (يوزرنيم + باسورد + اسم + دور + صلاحيات jsonb)
+  function orgAddMember(username, password, fullName, role, features) {
+    return sb.rpc("mizan_org_add_member", {
+      p_username: username,
+      p_password: password,
+      p_full_name: fullName || null,
+      p_role: role || "member",
+      p_features: features || null
+    }).then(function (r) {
+      if (r.error) throw r.error;
+      var d = r.data;
+      return Array.isArray(d) ? d[0] : d;
+    });
+  }
+  // تعديل صلاحيات حساب فرعي
+  function orgSetFeatures(userId, features) {
+    return sb.rpc("mizan_org_set_features", { p_user_id: userId, p_features: features }).then(function (r) {
+      if (r.error) throw r.error;
+      return true;
+    });
+  }
+  // حذف حساب فرعي (يُعاد استخدام اسم المستخدم بعده)
+  function orgDeleteMember(userId) {
+    return sb.rpc("mizan_org_delete_member", { p_user_id: userId }).then(function (r) {
+      if (r.error) throw r.error;
+      var d = r.data;
+      return Array.isArray(d) ? (d[0] || null) : (d || null);
+    });
+  }
+
+  function passwordLog() {
+    return sb.rpc("mizan_admin_password_log").then(function (r) {
+      if (r.error) throw r.error;
+      return r.data || [];
+    });
+  }
+  // نسخة احتياطية شاملة للمالك: كل جداول كل الشركات في كائن واحد
+  function adminExportAll() {
+    return sb.rpc("mizan_admin_export_all").then(function (r) {
+      if (r.error) throw r.error;
+      return r.data || null;
+    });
+  }
+  // نسخة احتياطية لشركة واحدة فقط (يختارها المالك)
+  function adminExportOne(orgId) {
+    return sb.rpc("mizan_admin_export_one", { p_org_id: orgId }).then(function (r) {
+      if (r.error) throw r.error;
+      return r.data || null;
+    });
+  }
+  // استعادة نسخة احتياطية في شركة محددة (المالك فقط، بدون باسورد)
+  function adminRestoreOne(orgId, payload) {
+    return sb.rpc("mizan_admin_restore_one", { p_org_id: orgId, p_payload: payload }).then(function (r) {
+      if (r.error) throw r.error;
+      return true;
+    });
+  }
+  // استيراد صفوف Excel لجدول رئيسي في شركة يختارها مالك البرنامج.
+  // الـ RPC يفرض صلاحية is_superadmin ونطاق الشركة من جهة قاعدة البيانات.
+  function adminImportExcel(orgId, table, mode, rows) {
+    return sb.rpc("mizan_admin_import_excel", {
+      p_org_id: orgId,
+      p_table: table,
+      p_mode: mode,
+      p_rows: rows
+    }).then(function (r) {
+      if (r.error) throw r.error;
+      return r.data || null;
+    });
+  }
+  // 🆕 (المهمة المزدوجة) تفريغ شركة كمنشأة جديدة — المالك فقط، ببوّابة كلمة سر المالك نفسها
+  function adminResetOrg(orgId, password) {
+    return sb.rpc("mizan_admin_reset_org", { p_org_id: orgId, p_password: password }).then(function (r) {
+      if (r.error) throw r.error;
+      return true;
+    });
+  }
+  // استعادة النسخة الشاملة (كل العملاء) — المالك فقط، بدون باسورد
+  function adminRestoreAll(payload) {
+    return sb.rpc("mizan_admin_restore_all", { p_payload: payload }).then(function (r) {
+      if (r.error) throw r.error;
+      return true;
+    });
+  }
+  // نسخة المالك الشاملة القابلة للتشغيل: كل الجداول + حسابات الدخول (ترحيل ٢٣)
+  function adminBackupFull() {
+    return sb.rpc("mizan_admin_backup_full").then(function (r) {
+      if (r.error) throw r.error;
+      return r.data || null;
+    });
+  }
+  // استعادة نسخة المالك الشاملة على هذا المشروع (تحذف كل حاجة وتحط اللي في الملف)
+  function adminRestoreFull(payload) {
+    return sb.rpc("mizan_admin_restore_full", { p_payload: payload }).then(function (r) {
+      if (r.error) throw r.error;
+      return r.data || "تمت الاستعادة";
+    });
+  }
+  // العميل يغيّر كلمة مروره (يعرف القديم) — يُسجّل التنبيه للمالك تلقائيًا
+function changeMyPassword(oldPass, newPass) {
+   return sb.rpc("mizan_change_my_password", { p_old_password: oldPass || null, p_new_password: newPass }).then(function (r) {
+   if (r.error) throw r.error;
+   return true;
+   });
+   }
+   // كلمة المرور الحالية اختيارية: يمرّر null فيتخطّى التحقق.
+   // كلمة المرور الجديدة تُحفظ في mizan_pw_store ليقرأها المالك العام.
+   // صاحب الشركة يغيّر كلمة مرور حساب من حسابات شركته فقط
+   function orgResetMemberPassword(userId, newPass) {
+   return sb.rpc("mizan_org_reset_member_password", { p_user_id: userId, p_new_password: newPass }).then(function (r) {
+   if (r.error) throw r.error;
+   return r.data || null;
+   });
+   }
+   // آخر تحديث لكلمات المرور لكل الحسابات (للمالك العام فقط) — بلا كلمة المرور (ترقية ٥٨)
+   function adminPwStore() {
+   return sb.rpc("mizan_admin_pw_store").then(function (r) {
+   if (r.error) throw r.error;
+   return r.data || [];
+   });
+   }
+  // نبضة حية: المستخدم "متصل الآن" (تستدعى كل 15 ثانية أثناء فتح التطبيق)
+  function presenceHeartbeat() {
+    return sb.rpc("mizan_presence_heartbeat").then(function (r) {
+      if (r.error) throw r.error;
+      return true;
+    });
+  }
+  // قائمة المتصلين حاليًا (للمالك فقط)
+  function presenceOnline() {
+    return sb.rpc("mizan_presence_online").then(function (r) {
+      if (r.error) throw r.error;
+      return r.data || [];
+    });
+  }
+
+  // ---- تبويبات إعدادات الشركة (العميل: بيانات شركته فقط) ----
+  // كل الدوال ترجع كائن الحمولة نفسه الذي تقبله دوال الحفظ (org + lists).
+  function clientSett() {
+    return sb.rpc("mizan_client_sett").then(function (r) {
+      if (r.error) throw r.error;
+      return r.data || null;
+    });
+  }
+  // 🛡 بناء 124: «المفتاح مش موجود» ≠ «المفتاح موجود ومصفوفته فاضية».
+  // دوال الحفظ على السحابة (mizan_client_sett_save / mizan_admin_sett_save) استبدال كامل:
+  // أي قائمة توصلها غير null ⇒ تمسح الجدول وتعيد إدخال الأسطر. والصيغة القديمة
+  // `payload.units || null` كانت بتحوّل **المصفوفة الفاضية** كمان لـ null؟ لأ —
+  // `[] || null` بيرجع `[]` (مصفوفة فاضية truthy) ⇒ أي حمولة ناقصة (بنية أوفلاين،
+  // أو تحميل فشل) كانت بتمسح الوحدات والتصنيفات والمستودعات كلها.
+  // القاعدة الجديدة: المفتاح الغائب ⇒ null (السحابة ما تلمسش الجدول)، والمصفوفة
+  // الموجودة ⇒ تُبعت كما هي، وأي قيمة تانية ⇒ null.
+  function settListArg(payload, key) {
+    if (!payload || !Object.prototype.hasOwnProperty.call(payload, key)) return null;
+    var v = payload[key];
+    return Array.isArray(v) ? v : null;
+  }
+  function saveClientSett(payload) {
+    // 🚚 بناء 178: سجل سيارات مناديب البيع محفوظ كعمود organizations.cars (jsonb) —
+    // بيسافر جوه p_org (نفس نمط invoice_fields) عشان ما نغيّرش توقيع الدالة ولا الجداول.
+    var orgArg = (payload && payload.org) ? Object.assign({}, payload.org) : null;
+    if (payload && Array.isArray(payload.cars)) {
+      orgArg = orgArg || {};
+      orgArg.cars = payload.cars;
+    }
+    return sb.rpc("mizan_client_sett_save", {
+      p_org: orgArg || null,
+      p_categories: settListArg(payload, "categories"),
+      p_units: settListArg(payload, "units"),
+      p_warehouses: settListArg(payload, "warehouses"),
+      p_owners: settListArg(payload, "owners"),
+      p_wallets: settListArg(payload, "wallets"),
+      p_banks: settListArg(payload, "banks")
+    }).then(function (r) {
+      if (r.error) throw r.error;
+      return true;
+    });
+  }
+  // نسخة احتياطية للعميل: بيانات شركته فقط (كل الجداول)
+  function clientExport() {
+    return sb.rpc("mizan_client_export").then(function (r) {
+      if (r.error) throw r.error;
+      return r.data || null;
+    });
+  }
+  // استعادة نسخة العميل: تطلب كلمة المرور الحالية أولًا (تحقق داخل القاعدة)
+  function clientRestore(password, payload) {
+    return sb.rpc("mizan_client_restore", { p_password: password, p_payload: payload }).then(function (r) {
+      if (r.error) throw r.error;
+      return true;
+    });
+  }
+  // ---- 🆕 بناء 154: سجل الإجراءات المشترك (سحابي لكل الشركة) ----
+  // الكتابة عبر دالة SECURITY DEFINER `mizan_log_activity` (ترقية 28) — الشركة
+  // تُقرأ من هوية الحساب جوه القاعدة (بلا أي org_id من العميل)، والقراءة من
+  // `audit_logs` عبر RLS (نفس الشركة). failsafe: لو الحاجة ناقصة على السحابة
+  // بترجع false/[] بلا ما توقف التطبيق (السجل المحلي يفضل شغّال).
+  function logActivity(action, detail) {
+    if (!isOnline()) return Promise.resolve(false);
+    try {
+      return sb.rpc("mizan_log_activity", { p_action: action, p_detail: detail || null })
+        .then(function (r) { if (r.error) throw r.error; return true; })
+        .catch(function () { return false; });
+    } catch (e) { return Promise.resolve(false); }
+  }
+  // allOrgs=true ⇒ كل الشركات (للسوبرأدمن في شاشة التدقيق فقط، وباسم الشركة مع كل سطر).
+  // الافتراضي = شركة الحساب النشطة بفلترة `org_id` صريحة (حاجز إضافي فوق RLS) ⇒
+  // باقي الشركات كل واحدة تشوف سجل شركتها بس (مفيش خلط).
+  function listActivity(limit, allOrgs) {
+    if (!isOnline()) return Promise.resolve([]);
+    var qy = sb.from("audit_logs").select("org_id, ts, user_name, action, detail")
+      .order("ts", { ascending: false })
+      .limit(limit || 500);
+    if (!allOrgs) { var oid = orgId(); if (oid) qy = qy.eq("org_id", oid); }
+    return qy.then(function (r) { if (r.error) throw r.error; return r.data || []; });
+  }
+  // ---- المالك: تبويبات إعدادات أي شركة ----
+  function adminSettLoad(orgId) {
+    return sb.rpc("mizan_admin_sett_load", { p_org_id: orgId }).then(function (r) {
+      if (r.error) throw r.error;
+      return r.data || null;
+    });
+  }
+  function adminSettSave(orgId, payload) {
+    return sb.rpc("mizan_admin_sett_save", {
+      p_org_id: orgId,
+      p_org: (payload && payload.org) || null,
+      p_categories: settListArg(payload, "categories"),
+      p_units: settListArg(payload, "units"),
+      p_warehouses: settListArg(payload, "warehouses"),
+      p_owners: settListArg(payload, "owners"),
+      p_wallets: settListArg(payload, "wallets"),
+      p_banks: settListArg(payload, "banks")
+    }).then(function (r) {
+      if (r.error) throw r.error;
+      return true;
+    });
+  }
+
+  window.DATA = {
+    isOnline: isOnline,
+    init: init,
+    client: client,
+    orgId: orgId,
+    login: login,
+    autoLogin: autoLogin,
+    // 🔐 بناء 263: قفل «حساب واحد على جهاز واحد»
+    sessionClaim: sessionClaim,
+    sessionRelease: sessionRelease,
+    deviceId: deviceId,
+    loginBusy: function () { return lastLoginBusy; },
+    setSessionLostHandler: function (fn) { sessionLostHandler = fn; },
+    joinOrg: joinOrg,
+    loadProfile: loadProfile,
+    email: email,
+    logout: logout,
+    loadEager: loadEager,
+    loadEagerAll: loadEagerAll,
+    // 🧱 بناء 242: القراءة الكاملة على دفعات (بتلغي سقف الـ1000 سطر في الطلب الواحد) — مصدر وحيد
+    readComplete: readComplete,
+    countRows: countRows,
+    eagerCache: eagerCache,
+    loadLazy: loadLazy,
+    saveRow: saveRow,
+    saveRows: saveRows,
+    remove: remove,
+    removeWhere: removeWhere,
+    me: me,
+    org: org,
+    getProfile: getProfile,
+    requestAccess: requestAccess,
+    accessInfo: accessInfo,
+      featureEnabled: featureEnabled,
+      featureFlag: featureFlag,
+    logCreatedAccount: logCreatedAccount,
+    adminCreatedAccounts: adminCreatedAccounts,
+    adminDeleteCreatedAccount: adminDeleteCreatedAccount,
+    adminOrgs: adminOrgs,
+    adminOrgFeatures: adminOrgFeatures,
+    adminInviteCodes: adminInviteCodes,
+    adminRotateInvite: adminRotateInvite,
+    adminMembers: adminMembers,
+    adminSetOrg: adminSetOrg,
+    adminSetSub: adminSetSub,
+    getSubPlans: getSubPlans,
+    setSubPlans: setSubPlans,
+    docAdd: docAdd,
+    docList: docList,
+    docDel: docDel,
+    codeRetire: codeRetire,
+    codeListRetired: codeListRetired,
+    codeNext: codeNext,
+    adminSetUser: adminSetUser,
+    adminCreateOrg: adminCreateOrg,
+    adminCreateUser: adminCreateUser,
+    adminDeleteOrg: adminDeleteOrg,
+    adminDeleteMember: adminDeleteMember,
+    adminResetPassword: adminResetPassword,
+    adminEditOrg: adminEditOrg,
+    adminSetUsername: adminSetUsername,
+    adminExportAll: adminExportAll,
+    adminExportOne: adminExportOne,
+    adminRestoreOne: adminRestoreOne,
+    adminImportExcel: adminImportExcel,
+    adminResetOrg: adminResetOrg,
+    adminRestoreAll: adminRestoreAll,
+    adminBackupFull: adminBackupFull,
+    adminRestoreFull: adminRestoreFull,
+    passwordLog: passwordLog,
+      changeMyPassword: changeMyPassword,
+      // 🔐 بناء 269: تأكيد كلمة السر قبل أي تعديل حسّاس (تأكيد فقط — مفيش تغيير)
+      verifyPassword: verifyPassword,
+      adminPwStore: adminPwStore,
+      orgResetMemberPassword: orgResetMemberPassword,
+    presenceHeartbeat: presenceHeartbeat,
+    presenceOnline: presenceOnline,
+    clientSett: clientSett,
+    saveClientSett: saveClientSett,
+    clientExport: clientExport,
+    clientRestore: clientRestore,
+    logActivity: logActivity,
+    listActivity: listActivity,
+    adminSettLoad: adminSettLoad,
+    adminSettSave: adminSettSave,
+    orgInfo: orgInfo,
+    orgMembers: orgMembers,
+    orgAddMember: orgAddMember,
+    orgSetFeatures: orgSetFeatures,
+    orgDeleteMember: orgDeleteMember,
+    EAGER: EAGER
+  };
+})();
