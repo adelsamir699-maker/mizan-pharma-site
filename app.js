@@ -3958,6 +3958,14 @@
   let printUiLockSince = 0;
   let printCleanupFn = null;
   let printPendingEl = null;
+  let printCleanupTimer = 0;
+  /* 🧱 بناء 17 (طلب المالك): «لما أضغط كانسل بعد الطباعة بتظهر صفحة الطباعة تاني».
+     المصدرين الاتنين المسؤولين عنها: (١) نداء تاني لنفس الورقة بعد الإلغاء، (٢) طلب مستني
+     في الطابور لنفس الورقة يتعاد فور ما الـ cleanup يفك القفل. بنسجّل آخر ورقة اطبعته
+     ولحظة انتهائها (مش لحظة بدايتها)، فأي نداء مكرر خلال ثانية بعد الإلغاء يتجاهل. */
+  let printLastEl = null;
+  let printLastAt = 0;
+  const PRINT_SAME_DOC_MS = 1000;
   const PRINT_LOCK_STALE_MS = 8000;
   /* 🆕 بناء 260 (#342): الطابور ما يمتش على مؤقّت واحد بيقع على حدود المهلة.
      القياس بالزمن الحقيقي (مش افتراض): أول ما الـ cleanup جدّول الطلب المستني عند
@@ -4004,6 +4012,11 @@
 
   function printSection(el, retryNo) {
     if (!el) return;
+    /* 🧱 بناء 17: منع «طباعة تانية بعد كانسل» من مصدرها. بنقتصر على ورقة الفاتورة عشان
+       ما نأثرش على تقارير تانية بتتطبع مرتين بسرعة بقصد من المستخدم. */
+    if (!retryNo && el.id === "invoicePage" && printLastEl === el && Date.now() - printLastAt < PRINT_SAME_DOC_MS) return;
+    // طلب مكرر لنفس الورقة وهو لسه مستني في الطابور — ما نحدّثهوش ولا نضيف نسخة تانية.
+    if (printUiBusy && printPendingEl === el) return;
     /* 🔧 بناء 260 (#342): القفل ما يبتلعش طلب طباعة مشروع.
        (١) قفل عالق (الطباعة ما رجّعتش afterprint) يتفك بالقياس بعد PRINT_LOCK_STALE_MS.
        (٢) الطلب الجاي والقفل مشغول يقف في طابور خانة واحدة ويطلع أول ما الحالية تخلص —
@@ -4053,6 +4066,7 @@
     const cleanup = () => {
       if (cleaned) return;
       cleaned = true;
+      if (printCleanupTimer) { clearTimeout(printCleanupTimer); printCleanupTimer = 0; }
       exitPaperTitle();
       el.classList.remove("print-target");
       el.classList.remove("paper-a4", "paper-a5", "paper-thermal");
@@ -4061,9 +4075,16 @@
       printUiBusy = false;
       printUiLockSince = 0;
       if (printCleanupFn === cleanup) printCleanupFn = null;
-      printUiCooldownUntil = Date.now() + 800;
+      /* 🧱 بناء 17: لحظة الإلغاء/الانتهاء هي اللي بتبدأ منها نافذة منع التكرار — مش لحظة
+         فتح نافذة الطباعة (اللي ممكن تطول دقائق والمستخدم بعدها يضغط كانسل). */
+      printLastEl = el;
+      printLastAt = Date.now();
+      printUiCooldownUntil = printLastAt + 800;
       /* 🆕 بناء 260 (#342): كان فيه طلب مستني في الطابور؟ سلسلة إعادة المحاولة الوحيدة
-         هي اللي بطلّعه (مش مؤقت بيقع على حدود المهلة بالحرف — المقيس فوق). */
+         هي اللي بطلّعه (مش مؤقت بيقع على حدود المهلة بالحرف — المقيس فوق).
+         🧱 بناء 17: بس لو الطلب المستني **نفس الورقة اللي اتلغت**، يتشال — ده بالظبط
+         اللي كان بيعمل «طباعة تانية بعد كانسل» فور ما القفل يتفك. */
+      if (printPendingEl === el) printPendingEl = null;
       if (printPendingEl && !printPendingEl.isConnected) printPendingEl = null;
       schedulePendingPrint(0);
     };
@@ -4079,7 +4100,7 @@
       cleanup();
       return;
     }
-    setTimeout(cleanup, 900);
+    printCleanupTimer = setTimeout(cleanup, 900);
   }
 
   /* ==================== 🧾 بناء 286 — PDF للفاتورة ومشاركته واتس (يُولَّد عند الطلب من داتا البرنامج) ====================
