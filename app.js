@@ -45,6 +45,20 @@
     }
   }
 
+  /* 💊 بناء 14: عدد الشرائط بالعلبة — مصدره الوحيد طبقة الصيدلية.
+     أي عطب في الهوك يُقال في الكونسول ويُعامل كـ«لا تقسيم» بدل ما الفاتورة تتولد بسعر غلط. */
+  function pharmaStripsCount(productId) {
+    try {
+      var fn = window.PHARMA && window.PHARMA.stripsPerBox;
+      if (typeof fn !== "function") return 0;
+      var n = Math.floor(Number(fn(productId)) || 0);
+      return isFinite(n) && n > 0 ? n : 0;
+    } catch (e) {
+      try { console.warn("PHARMA stripsPerBox", e); } catch (e2) { }
+      return 0;
+    }
+  }
+
   /* ================== التخزين ================== */
   const LS_CUSTOMERS = "mizan_customers_v1";
   const LS_TXS = "mizan_txs_v1";
@@ -3390,7 +3404,7 @@
           left: avgTrackedQty(p) ? Math.max(0, Number(p.avgOldQty) || 0) : -1
         };
       }
-      const qty = Number(it.qty) || 0;
+      const qty = posCostQty(it);
       const g = st[k];
       if (g.left < 0) { it.costTotal = Math.round(qty * g.avg * 100) / 100; return; }
       const oldPart = Math.min(qty, g.left);
@@ -3402,7 +3416,7 @@
   function consumeAvgForItems(items) {
     (items || []).forEach((it) => {
       const p = products.find((x) => Number(x.id) === Number(it.productId));
-      if (p) consumeAvgOldQty(p, Number(it.qty) || 0);
+      if (p) consumeAvgOldQty(p, posCostQty(it));
     });
     saveProducts();
   }
@@ -8145,6 +8159,18 @@
   }
   // على الورقة والشاشة: الخانة ما تفضلش بيضا — لو مفيش وحدة مسجلة خالص تظهر «—»
   function lineUnitText(it) { return lineUnit(it) || "—"; }
+  /* 💊 بناء 14: تكلفة الصنف محسوبة على «العلبة»، فسطر الشريط يُقسَّم لعدد العلب قبل
+     تخصيص التكلفة/استهلاك متوسط الشراء — وإلا هيظهر ربح وهمي في التقارير. */
+  function posCostQty(it) {
+    const q = Number(it && it.qty) || 0;
+    const n = Math.max(0, Math.floor(Number(it && it.stripsPerBox) || 0));
+    return n > 1 ? q / n : q;
+  }
+  function stripNoteText(it) {
+    const n = Math.max(0, Math.floor(Number(it && it.stripsPerBox) || 0));
+    const s = Math.max(0, Math.floor(Number(it && it.stripsSelected) || 0));
+    return n > 1 && s > 0 ? " (" + s + " من " + n + " شريط)" : "";
+  }
 
   function discountStatusText(p) {
     const pct = Number(p.discountPercent) || 0;
@@ -10312,8 +10338,8 @@
     /* 🆕 بناء 180: القرار ده بقى في مصدر واحد `posLinePriceFor` — لو صاحب الشركة اختارت
        «ممنوع» ترجع سعر الدليل **غصب** عن أي مكتوب في الخانة (فالـ readonly وحده مش الحماية). */
     const typedPrice = moneyVal("#txtPosPrice");
-    const price = posLinePriceFor(prod, typedPrice);
-    if (!(price > 0)) {
+    const boxPrice = posLinePriceFor(prod, typedPrice);
+    if (!(boxPrice > 0)) {
       if (priceEditAllowed()) {
         toast("اكتب سعر البيع المتفق عليه مع العميل في خانة «سعر البيع».", "warning");
         $("#txtPosPrice").focus();
@@ -10323,7 +10349,18 @@
       }
       return;
     }
-    if (!(typedPrice > 0)) $("#txtPosPrice").value = moneyStr(price);
+    /* 💊 بناء 14 (طلب المالك): الصنف اللي عليه «عدد الشرائط بالعلبة» ينزل في الفاتورة
+       ومعه قائمة منسدلة 1..N. السعر المخزّن في الدليل = سعر العلبة، وسعر الشريط =
+       سعر العلبة ÷ N — والكمية اللي بيختارها هي عدد الشرائط اللي اتصرفت فعليًا. */
+    const stripsPerBox = pharmaStripsCount(prod.id);
+    const price = stripsPerBox > 1 ? boxPrice / stripsPerBox : boxPrice;
+    if (stripsPerBox > 1) {
+      let chosen = Math.round(qty);
+      if (!isFinite(chosen) || chosen < 1) chosen = 1;
+      if (chosen > stripsPerBox) chosen = stripsPerBox;
+      qty = chosen;
+    }
+    if (!(typedPrice > 0) || stripsPerBox > 1) $("#txtPosPrice").value = moneyStr(price);
     /* 🧾 بناء 283: «المتاح» من **مصدر قرار واحد** (`vanPosAvail` = متبقي رحلة عربية المندوب
        المفتوحة) — نفس اللي بيبني قائمة الأصناف وشارة الرصيد ونفس بوابة الحفظ (283).
        غير المندوب ⇒ `stockAt` بالحرف. الكتابة على المخزون برّه القرار (`addStockAt` ما اتلمستش). */
@@ -10367,16 +10404,19 @@
       });
       return;
     }
-    posCommitLine(prod, qty, price);
+    posCommitLine(prod, qty, price, stripsPerBox, boxPrice);
     posResetEntry();
     if (onDone) onDone(qty);
   }
 
-  /* إدخال السطر فعليًا (مصدر واحد للإضافة — اليدوي والمسح والـ«بعد إضافة رصيد»). */
-  function posCommitLine(prod, qty, price) {
+  /* إدخال السطر فعليًا (مصدر واحد للإضافة — اليدوي والمسح والـ«بعد إضافة رصيد»).
+     💊 بناء 14: سطور الشرائط لا تُدمج مع بعضها — كل سطر له اختياره الخاص في القائمة. */
+  function posCommitLine(prod, qty, price, stripsPerBox, boxPrice) {
     posLastAddAt = Date.now();
     const pct = activeDiscountPct(prod);
-    const existing = posItems.find((it) => it.productId === prod.id);
+    const stripN = Math.max(0, Math.floor(Number(stripsPerBox) || 0));
+    const isStripLine = stripN > 1;
+    const existing = isStripLine ? null : posItems.find((it) => it.productId === prod.id);
     if (existing) {
       existing.qty = Math.round((existing.qty + qty) * 100) / 100;
       if (pct > 0) existing.discount = Math.round(existing.qty * existing.price * pct / 100 * 100) / 100;
@@ -10385,10 +10425,13 @@
         productId: prod.id,
         code: prod.code,
         nameAr: prod.nameAr,
-        unit: prod.unit,
+        unit: isStripLine ? "شريط" : prod.unit,
         qty: qty,
         price: price,
         discount: pct > 0 ? Math.round(qty * price * pct / 100 * 100) / 100 : 0,
+        stripsPerBox: stripN,
+        stripsSelected: isStripLine ? qty : 0,
+        boxPrice: isStripLine ? (Number(boxPrice) || price * stripN) : price,
         tax: 0,
         total: 0
       });
@@ -11264,11 +11307,60 @@
     return { sub: sub, tax: tax, extra: extra, grand: grand, paid: pd.paid, due: pd.due, payments: pd.payments, overBy: pd.overBy };
   }
 
+  /* 💊 بناء 14: قائمة اختيار الشرائط في سطر الفاتورة — عدد الخيارات = كل شرائط العلبة. */
+  function posStripOptions(n, selected) {
+    let html = "";
+    for (let i = 1; i <= n; i++) {
+      html += '<option value="' + i + '"' + (i === selected ? ' selected' : '') + '>' +
+        i + (i === 1 ? " شريط" : " شرائط") + '</option>';
+    }
+    return html;
+  }
+  function posLineStripPrice(it) {
+    const n = Math.round(Number(it && it.stripsPerBox) || 0);
+    const box = Number(it && it.boxPrice) || 0;
+    return n > 1 ? box / n : (Number(it && it.price) || 0);
+  }
+  function posApplyStripChoice(idx, chosen) {
+    const it = posItems[idx];
+    if (!it) return;
+    const n = Math.round(Number(it.stripsPerBox) || 0);
+    if (n <= 1) return;
+    let v = Math.floor(Number(chosen) || 0);
+    if (v < 1) v = 1;
+    if (v > n) v = n;
+    it.stripsSelected = v;
+    it.qty = v;
+    it.price = posLineStripPrice(it);
+    posCalcRow(idx);
+    const tr = document.querySelector('#dgvItems tbody tr[data-idx="' + idx + '"]');
+    if (tr) {
+      const q = tr.querySelector('input[data-f="qty"]');
+      if (q) q.value = String(v);
+      const sel = tr.querySelector("select.strip-select");
+      if (sel) sel.value = String(v);
+      const pc = tr.querySelector(".c-fixed");
+      if (pc) pc.textContent = fmt(it.price);
+      const tx = tr.querySelector(".c-tax");
+      if (tx) tx.textContent = fmt(it.tax);
+      const tt = tr.querySelector(".c-total");
+      if (tt) tt.textContent = fmt(it.total);
+    }
+    posRecalc();
+  }
+
   function renderPosItems() {
     const tbody = $("#dgvItems tbody");
     tbody.innerHTML = "";
     posItems.forEach((it, i) => {
       posCalcRow(i);
+      const stripN = Math.round(Number(it.stripsPerBox) || 0);
+      const chosenStrip = Math.min(stripN, Math.max(1, Math.round(Number(it.stripsSelected || it.qty) || 1)));
+      const qtyCell = stripN > 1
+        ? '<td class="qty-with-strips"><span class="strip-qty-pair"><select class="strip-select" data-f="strips" title="عدد الشرائط بالعلبة">' +
+          posStripOptions(stripN, chosenStrip) + '</select>' +
+          '<input class="cell-input" data-f="qty" type="text" value="' + esc(it.qty) + '" /></span></td>'
+        : '<td><input class="cell-input" data-f="qty" type="text" value="' + esc(it.qty) + '" /></td>';
       const tr = document.createElement("tr");
       tr.dataset.idx = i;
       tr.innerHTML =
@@ -11277,7 +11369,7 @@
         '<td>' + esc(it.code) + '</td>' +
         '<td>' + esc(it.nameAr) + '</td>' +
         '<td>' + esc(lineUnitText(it)) + '</td>' +
-        '<td><input class="cell-input" data-f="qty" type="text" value="' + esc(it.qty) + '" /></td>' +
+        qtyCell +
         '<td class="c-fixed">' + fmt(it.price) + '</td>' +
         '<td><input class="cell-input" data-f="discount" type="text" value="' + fmt(it.discount) + '" /></td>' +
         '<td class="c-tax' + (TAX.enabled ? '' : ' tax-hidden') + '"' + (TAX.enabled ? '' : ' style="display:none"') + '>' + fmt(it.tax) + '</td>' +
@@ -11419,6 +11511,10 @@
       discount: it.discount,
       tax: it.tax,
       total: it.total,
+      // 💊 بناء 14: هوية الشريط بتتخزّن على السطر (للطباعة/الاستعادة) بلا تغيير في المخطط.
+      stripsPerBox: Math.max(0, Math.floor(Number(it.stripsPerBox) || 0)),
+      stripsSelected: Math.max(0, Math.floor(Number(it.stripsSelected) || 0)),
+      boxPrice: (it.boxPrice != null ? Number(it.boxPrice) : undefined),
       costTotal: (it.costTotal != null ? it.costTotal : undefined)
     }));
     invoice.status = "posted";
@@ -11575,7 +11671,7 @@
         // 🔢 بناء 270: الرقم المسلسل مطبوع على الورقة زي الشاشة بالحرف
         '<td>' + (i + 1) + '</td>' +
         '<td>' + esc(it.code) + '</td>' +
-        '<td style="text-align:right">' + esc(it.nameAr) + returnedBadge(true, inv.id, it) + '</td>' +
+        '<td style="text-align:right">' + esc((it.nameAr || "") + stripNoteText(it)) + returnedBadge(true, inv.id, it) + '</td>' +
         '<td>' + esc(lineUnitText(it)) + '</td>' +
         '<td>' + esc(Number(it.qty).toLocaleString("en-US")) + '</td>' +
         '<td>' + fmt(it.price) + '</td>' +
@@ -16860,12 +16956,12 @@ id: nextVoucherId(),
     // الكميات المبيعة قبل الفاتورة دي على نفس الرحلة
     vanTripSales(trip).forEach((s) => (s.items || []).forEach((it) => {
       const k = String(it.productId);
-      used[k] = round2((used[k] || 0) + (Number(it.qty) || 0));
+      used[k] = round2((used[k] || 0) + posCostQty(it));
     }));
     (items || []).forEach((it) => {
       const k = String(it.productId);
       const layers = ((trip.loaded) || []).filter((l) => Number(l.productId) === Number(it.productId));
-      let need = Number(it.qty) || 0;
+      let need = posCostQty(it);
       let skip = used[k] || 0;
       let done = 0;
       layers.forEach((l) => {
@@ -16878,7 +16974,7 @@ id: nextVoucherId(),
         need = round2(need - take);
       });
       it.costTotal = round2(done);
-      used[k] = round2((used[k] || 0) + (Number(it.qty) || 0));
+      used[k] = round2((used[k] || 0) + posCostQty(it));
     });
   }
   // رصيد عهدة المندوب في الرحلة = (تكلفة الحمولة − تكلفة المبيع − تكلفة الرجوع) + (نقد المبيع − المورَّد)
@@ -18932,6 +19028,10 @@ id: nextVoucherId(),
       items: posItems.map((it, idx) => ({
         id: idx + 1, productId: it.productId, code: it.code, nameAr: it.nameAr, unit: lineUnit(it),
         qty: it.qty, price: it.price, discount: it.discount, tax: it.tax, total: it.total,
+        // 💊 بناء 14: نفس هوية الشريط في فاتورة المندوب
+        stripsPerBox: Math.max(0, Math.floor(Number(it.stripsPerBox) || 0)),
+        stripsSelected: Math.max(0, Math.floor(Number(it.stripsSelected) || 0)),
+        boxPrice: (it.boxPrice != null ? Number(it.boxPrice) : undefined),
         costTotal: (it.costTotal != null ? it.costTotal : undefined)
       }))
     };
@@ -26008,7 +26108,10 @@ id: nextVoucherId(),
     // 🆕 ترقية ٨٠ (ميزان فارما): إصلاح مسار استعادة شركة واحدة — credit_limit،
     // حذف suppliers/products قبل الإدراج، وتوافق أعمدة products/categories/units الحالية.
     // اتنفّذت 25/11 على مشروع ميزان فارما.
-    "db/supabase-upgrade-80-restore-customer-credit-limit.sql"];
+    "db/supabase-upgrade-80-restore-customer-credit-limit.sql",
+    // 🆕 ترقية ٨١ (ميزان فارما): عمود strips_per_box على pharma_product_meta —
+    // اتنفّذت 25/11 على المشروع المستقل الجديد (بناء 14). التغطية في ترقية ٧٨ ديناميكية.
+    "db/supabase-upgrade-81-pharma-strips-per-box.sql"];
   // ملفات موجودة في db/ بس مش داخلة في نسخة النشر — كل واحد بسبب مكتوب.
   // ملفات rollback لا تدخل الحزمة.
   // بناء 141: ترقية ٥ـ (قفل التسجيل + دوال الرموز) **اتنفّذت** 5/10 ≈01:29 ⇒ دخلت FILES فوق
@@ -27129,10 +27232,33 @@ id: nextVoucherId(),
       const f = inp.dataset.f;
       const v = parseMoney(inp.value);
       posItems[idx][f] = v;
+      /* 💊 بناء 14: خانة الكمية في سطر الشريط بتاع القائمة — أي كتابة فيها لازم تفضل
+         متطابقة مع الاختيار وسعر الشريط، وإلا الفاتورة تطلع بكمية واختيار مختلفين. */
+      if (f === "qty" && posItems[idx].stripsPerBox > 1) {
+        const n = Math.floor(Number(posItems[idx].stripsPerBox));
+        const chosen = Math.min(n, Math.max(1, Math.round(v) || 1));
+        posItems[idx].qty = chosen;
+        posItems[idx].stripsSelected = chosen;
+        posItems[idx].price = posLineStripPrice(posItems[idx]);
+        inp.value = String(chosen);
+        const sel = tr.querySelector("select.strip-select");
+        if (sel) sel.value = String(chosen);
+        tr.querySelector(".c-fixed").textContent = fmt(posItems[idx].price);
+      }
       posCalcRow(idx);
       tr.querySelector(".c-tax").textContent = fmt(posItems[idx].tax);
       tr.querySelector(".c-total").textContent = fmt(posItems[idx].total);
       posRecalc();
+    });
+
+    /* 💊 بناء 14: اختيار عدد الشرائط من القائمة المنسدلة يحدّث الكمية وسعر الشريط
+       وإجمالي السطر والفاتورة في نفس اللحظة (سعر العلبة محفوظ على السطر في boxPrice). */
+    $("#dgvItems tbody").addEventListener("change", (e) => {
+      const sel = e.target.closest("select.strip-select");
+      if (!sel) return;
+      const tr = sel.closest("tr");
+      if (!tr) return;
+      posApplyStripChoice(parseInt(tr.dataset.idx, 10), sel.value);
     });
 
     $("#dgvItems tbody").addEventListener("click", (e) => {

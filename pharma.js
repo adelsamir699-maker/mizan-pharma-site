@@ -23,6 +23,7 @@
     fPRegistration: "registrationNo",
     fPForm: "form",
     fPStrength: "strength",
+    fPStripsPerBox: "stripsPerBox",
     fPStorage: "storage",
     fPPharmaNotes: "notes"
   };
@@ -39,6 +40,22 @@
     return (Math.round((Number(n) || 0) * 100) / 100).toLocaleString("en-US");
   }
   function num (v) { return Math.round((parseFloat(String(v || "").replace(/,/g, "")) || 0) * 100) / 100; }
+  /* عدد الشرائط: رقم صحيح موجب، والصفر معناه «مفيش تقسيم» (سعر العلبة زي ما هو).
+     الحد الأعلى 500 عشان القائمة المنسدلة في الفاتورة ما تعرضش آلاف الخيارات. */
+  var MAX_STRIPS = 500;
+  function asciify (v) {
+    return String(v == null ? "" : v)
+      .replace(/[٠-٩]/g, function (d) { return String("٠١٢٣٤٥٦٧٨٩".indexOf(d)); })
+      .replace(/[۰-۹]/g, function (d) { return String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)); })
+      .replace(/[٬,]/g, "").trim();
+  }
+  function stripsCount (v) {
+    var s = asciify(v);
+    if (!s) return 0;
+    var n = Math.floor(Number(s));
+    if (!isFinite(n) || n < 0) return 0;
+    return n > MAX_STRIPS ? MAX_STRIPS : n;
+  }
   function iso (d) {
     return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
   }
@@ -106,6 +123,7 @@
         registrationNo: r.registration_no || "",
         form: r.form || "",
         strength: r.strength || "",
+        stripsPerBox: stripsCount(r.strips_per_box),
         storage: r.storage || "",
         notes: r.notes || "",
         rxRequired: r.rx_required === true
@@ -168,7 +186,13 @@
     var m = r.meta || {};
     Object.keys(META_FIELDS).forEach(function (id) {
       var el = $(id);
-      if (el) el.value = m[META_FIELDS[id]] || "";
+      if (!el) return;
+      if (id === "fPStripsPerBox") {
+        var n = stripsCount(m.stripsPerBox);
+        el.value = n > 0 ? String(n) : "";
+      } else {
+        el.value = m[META_FIELDS[id]] || "";
+      }
     });
     // بناء 10: اختيار «لا يُصرف إلا بوصفة» اتلغى — مفيش عرض ولا استخدام للعلم القديم.
   }
@@ -176,7 +200,17 @@
     var m = {};
     Object.keys(META_FIELDS).forEach(function (id) {
       var el = $(id);
-      if (el) m[META_FIELDS[id]] = String(el.value || "").trim();
+      if (!el) return;
+      if (id === "fPStripsPerBox") {
+        var typed = asciify(el.value);
+        var n = stripsCount(typed);
+        if (typed && (n !== Number(typed) || n < 1)) {
+          notify("عدد الشرائط بالعلبة لازم يكون رقم صحيح من 1 إلى " + MAX_STRIPS + " — اتضبط على " + (n || 0) + ".", "warning");
+        }
+        m[META_FIELDS[id]] = n;
+      } else {
+        m[META_FIELDS[id]] = String(el.value || "").trim();
+      }
     });
     // بناء 10: أي علم روشته قديم يترجع false — الصنف دايمًا متاح للبيع بدون روشته.
     m.rxRequired = false;
@@ -256,6 +290,7 @@
       local_id: Number(p && p.id), product_code: (p && p.code) || "",
       active_ingredient: m.activeIngredient || "", manufacturer: m.manufacturer || "",
       registration_no: m.registrationNo || "", form: m.form || "", strength: m.strength || "",
+      strips_per_box: stripsCount(m.stripsPerBox),
       storage: m.storage || "", rx_required: !!m.rxRequired, notes: m.notes || "", deleted: false
     };
   }
@@ -834,6 +869,14 @@
       x.r.meta = readMetaForm();
       save(x.d);
       queueCloud(cloudUpsert("pharma_product_meta", cloudMetaRow(x.r.meta, product)), "meta save");
+    },
+    stripsPerBox: function (productId) {
+      return stripsCount((entry(productId, false).r.meta || {}).stripsPerBox);
+    },
+    stripPrice: function (productId, boxPrice) {
+      var n = stripsCount((entry(productId, false).r.meta || {}).stripsPerBox);
+      var p = Number(boxPrice) || 0;
+      return n > 1 ? p / n : p;
     },
     validateSale: validateSale,
     posInvoiceSaved: posInvoiceSaved
