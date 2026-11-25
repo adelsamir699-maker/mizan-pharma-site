@@ -25817,6 +25817,7 @@ id: nextVoucherId(),
   // مجلد واحد يشتغل على أي سيرفر: site/ + database.sql + data.json + README
   var DEPLOY_SITE_FILES = ["index.html", "app.js", "data.js", "cloud.js", "install.js",
     "excel_import.js", "pharma.js", "vendor/exceljs.min.js", "vendor/EXCELJS-LICENSE.txt",
+    "vendor/jspdf.umd.min.js", "vendor/html2canvas.min.js", "vendor/PDF-LICENSE.txt",
     "lib_supabase.js", "manifest.webmanifest", "sw.js", "styles.css", "supabase.config.js",
     "icons/icon-1024.png", "icons/icon-180.png", "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png",
     "icons/pharma-icon-192.png", "icons/pharma-icon-512.png", "icons/pharma-maskable-512.png", "icons/pharma-icon-180.png", "icons/pharma-icon-1024.png"];
