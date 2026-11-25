@@ -167,8 +167,7 @@
       var el = $(id);
       if (el) el.value = m[META_FIELDS[id]] || "";
     });
-    var rx = $("fPRx");
-    if (rx) rx.value = m.rxRequired ? "1" : "0";
+    // بناء 10: اختيار «لا يُصرف إلا بوصفة» اتلغى — مفيش عرض ولا استخدام للعلم القديم.
   }
   function readMetaForm () {
     var m = {};
@@ -176,8 +175,8 @@
       var el = $(id);
       if (el) m[META_FIELDS[id]] = String(el.value || "").trim();
     });
-    var rx = $("fPRx");
-    m.rxRequired = !!(rx && rx.value === "1");
+    // بناء 10: أي علم روشته قديم يترجع false — الصنف دايمًا متاح للبيع بدون روشته.
+    m.rxRequired = false;
     return m;
   }
 
@@ -266,11 +265,10 @@
       var p = findProduct(it.productId);
       if (!p) continue;
       var x = entry(p.id, false);
-      var meta = x.r.meta || {};
       var name = p.nameAr || p.code || "صنف";
-      if (meta.rxRequired && !RX.active) {
-        return "الصنف («" + name + "») لا يُصرف إلا بوصفة — افتح «💊 إدارة الصيدلية» ← «الصرف بوصفة» وسجّل الوصفة أولًا.";
-      }
+      /* بناء 10 (طلب المالك): الوصفة مش شرط للبيع في ميزان فارما — الفاتورة بتتحفظ
+         من غير روشته. الفحص الوحيد اللي لسه شغّال هنا هو فحص الدفعات/الصلاحية.
+         علم rxRequired القديم اتجاهل بالكامل (ما مسحناش بيانات موجودة). */
       if ((x.r.batches || []).length > 0) {
         var avail = availableQty(p.id, wh);
         if (avail + 0.00001 < num(it.qty)) {
@@ -335,12 +333,13 @@
         qty: num(it.qty),
         batchNo: alloc.lines.length ? alloc.lines.join(" | ") : "بدون دفعة مسجّلة",
         expiry: alloc.firstExpiry || "",
-        patient: RX.active ? RX.patient : "",
-        doctor: RX.active ? RX.doctor : "",
-        rxNo: RX.active ? RX.no : "",
+        // بناء 10: سجل الصرف ما بيحمل أي بيانات روشته — الفاتورة مستقلة عنها تمامًا.
+        patient: "",
+        doctor: "",
+        rxNo: "",
         needsReconcile: short > 0,
         batchRefs: refs,
-        note: (RX.active ? RX.note : "") + (short > 0 ? " | راجع تخصيص الدفعات" : "")
+        note: short > 0 ? "راجع تخصيص الدفعات" : ""
       });
     }
     if (!recs.length) return;
