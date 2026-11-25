@@ -425,8 +425,11 @@
       },
       fromCloud: function (r) {
         var stock = r.stock; // jsonb -> object {warehouse: qty}
-        if (!stock || typeof stock !== "object" || Array.isArray(stock)) {
-          // لنسخ الإصدارات القديمة بدون توزيع: رصيد المبلغ كله في المستودع الافتراضي
+        // {} من بيانات الاستيراد مع stock_qty موجود = نسخة قديمة بلا توزيع على المستودعات.
+        // لو ما عملناش fallback هنا كل الأصناف تظهر برصيد صفر في شاشة البيع.
+        var distributed = stock && typeof stock === "object" && !Array.isArray(stock) &&
+          Object.keys(stock).some(function (k) { return Number(stock[k]) > 0; });
+        if (!distributed) {
           stock = {};
           if (Number(r.stock_qty || 0) > 0) stock["المخزن الرئيسي"] = Number(r.stock_qty || 0);
         }
