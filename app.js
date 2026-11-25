@@ -28111,7 +28111,6 @@ const pwEye = document.getElementById("btnShowPass");
               try { pharmaEmit("pharmaHydrate", null); } catch (e2) { }
             });
           }
-          try { pharmaEmit("pharmaHydrate", null); } catch (e) { }
         })
         .then(() => {
           const changed = adoptCloud();
