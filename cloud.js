@@ -443,9 +443,20 @@
           // (سيرفر قديم / ترحيل ما اتنفّذش) بترجع لسعر الشراء القديم ⇒ مافيش صنف يطلع فاضي.
           // ⚠️ كان `weightedAvgCost: Number(r.purchase_price||0)` دايمًا — ده اللي كان بيمنع
           // المتوسط الحقيقي (المتوسط اللي من الإكسيل / المحسوب من الفواتير) إنه يوصل للشاشة.
-          lastPurchasePrice: priceForCloud(priceForCloud(r.last_purchase_price, r.purchase_price), localPriceOf(r.local_id, "lastPurchasePrice")),
-          avgPurchasePrice: priceForCloud(priceForCloud(r.avg_purchase_price, r.purchase_price), localPriceOf(r.local_id, "avgPurchasePrice")),
-          weightedAvgCost: priceForCloud(priceForCloud(r.avg_purchase_price, r.purchase_price), localPriceOf(r.local_id, "weightedAvgCost")),
+          // 🆕 ترتيب مطابق لـ `lastPriceOf`/`avgPriceOf` في app.js: نزّل العمود السحابي،
+          // وبعده القيمة المحلية المحسوبة، وآخر حاجة سعر الشراء القديم — ما يجيش
+          // `purchase_price` قبل المتوسط المحلي ويطمسه (كان بيحصل بعد أي تحميل سحابي).
+          lastPurchasePrice: priceForCloud(priceForCloud(r.last_purchase_price,
+            localPriceOf(r.local_id, "lastPurchasePrice")), priceForCloud(r.purchase_price,
+            localPriceOf(r.local_id, "purchasePrice"))),
+          avgPurchasePrice: priceForCloud(priceForCloud(r.avg_purchase_price,
+            localPriceOf(r.local_id, "avgPurchasePrice")), priceForCloud(
+            localPriceOf(r.local_id, "weightedAvgCost"), priceForCloud(r.purchase_price,
+            localPriceOf(r.local_id, "purchasePrice")))),
+          weightedAvgCost: priceForCloud(priceForCloud(r.avg_purchase_price,
+            localPriceOf(r.local_id, "weightedAvgCost")), priceForCloud(
+            localPriceOf(r.local_id, "avgPurchasePrice"), priceForCloud(r.purchase_price,
+            localPriceOf(r.local_id, "purchasePrice")))),
           salePrice: Number(r.sale_price || 0),
           discountPercent: 0, discountStart: "", discountEnd: "",
           stock: stock, qty: Number(r.stock_qty || 0), reorder: Number(r.min_stock || 0),

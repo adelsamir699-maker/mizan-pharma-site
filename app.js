@@ -25995,7 +25995,8 @@ id: nextVoucherId(),
     "journal_entries", "journal_lines", "mizan_created_accounts", "mizan_invoice_seq",
     "mizan_pw_store", "owners", "password_changes", "presence", "products",
     "purchase_items", "purchases", "sale_items", "sales", "supplier_txs", "suppliers",
-    "treasury", "units", "vouchers", "warehouses"];
+    "treasury", "units", "vouchers", "warehouses",
+    "pharma_product_meta", "pharma_batches", "pharma_dispenses"];
 
   // ============ 🆕 بناء 124: تغطية النسخة الاحتياطية — مصدر واحد للحقيقة ============
   // الجداول اللي `mizan_admin_restore_full` بيفرّغها على السيرفر (ترقيات ٣٢ و٣٦ و٣٨).
@@ -26009,7 +26010,9 @@ id: nextVoucherId(),
     "treasury", "units", "vouchers", "warehouses",
     "sale_returns", "sale_return_items", "purchase_returns", "purchase_return_items",
     "mizan_documents", "mizan_retired_codes",
-    "fixed_assets"];
+    "fixed_assets",
+    // 💊 ترقية ٧٨: بيانات الصيدلية جوّه النسخة الكاملة ونسخة الشركة
+    "pharma_product_meta", "pharma_batches", "pharma_dispenses"];
   // الجداول اللي مالهاش عمود org_id (مقيس على القاعدة الحيّة 02/10) — ما بتتقسّمش على شركة
   var ORG_SCOPED_EXCLUDE = ["organizations", "mizan_pw_store"];
   // نطاق نسخة «شركة واحدة»: كل الجداول ماعدا الحسابات العامة وكلمات المرور
@@ -26017,7 +26020,8 @@ id: nextVoucherId(),
   // الجداول اللي `mizan_admin_restore_one` بيرجّعها فعلًا company-by-company (ترقية ١٢)
   var RESTORE_ONE_COVERS = ["sale_items", "sales", "purchase_items", "purchases", "supplier_txs",
     "customer_txs", "vouchers", "journal_lines", "journal_entries", "audit_logs", "treasury",
-    "accounts", "owners", "warehouses", "units", "categories", "customers", "suppliers", "products"];
+    "accounts", "owners", "warehouses", "units", "categories", "customers", "suppliers", "products",
+    "pharma_product_meta", "pharma_batches", "pharma_dispenses"];
 
   // استكمال قائمة الجداول من اللقطة نفسها: أي مفتاح مصفوفة جديد على السيرفر
   // يدخل database.sql أوتوماتيك — عشان القائمة اليدوية ما سيّبتش تعديلات برّا النسخة (بند ٦)
@@ -26166,7 +26170,10 @@ id: nextVoucherId(),
     purchase_return_items: "سطور مرتجعات المشتريات",
     mizan_documents: "📁 مستندات العملاء والموردين",
     mizan_retired_codes: "أرقام العملاء والموردين المتقاعدة",
-    fixed_assets: "الأصول الثابتة"
+    fixed_assets: "الأصول الثابتة",
+    pharma_product_meta: "بيانات أصناف الصيدلية",
+    pharma_batches: "دفعات الصيدلية",
+    pharma_dispenses: "سجل صرف الصيدلية"
   };
   function restoreTableAr(t) { return RESTORE_TABLE_AR[t] || String(t); }
   // في نطاق أي مسار، كام سطر من الجدول ده هيتلمسح فعلًا
