@@ -633,22 +633,26 @@
     notify("الوصفة مفعّلة — اضيف الأصناف في شاشة البيع زي ما تعمل دايمًا.", "success");
     if (A && typeof A.showView === "function") A.showView("sales");
   }
-  function clearRx () {
+  function clearRxState () {
     RX = { active: false, patient: "", doctor: "", no: "", date: "", note: "" };
-    ["phRxPatient", "phRxDoctor", "phRxNo", "phRxNote"].forEach(function (id) { if ($(id)) $(id).value = ""; });
+    ["phRxPatient", "phRxDoctor", "phRxNo", "phRxDate", "phRxNote"].forEach(function (id) { if ($(id)) $(id).value = ""; });
     renderRxStatus();
+  }
+  function clearRx () {
+    clearRxState();
     notify("تم إلغاء الوصفة.", "info");
   }
 
   /* 🔒 الخروج/تغيير الشركة: الوصفة المفعّلة والكاش ما ينتقلوش لحساب تاني.
      بنفضّ الكاش كمان عشان أي دخول تاني يسحب من Supabase قبل ما البيع يفتح. */
   function resetRx () {
-    RX = { active: false, patient: "", doctor: "", no: "", date: "", note: "" };
-    ["phRxPatient", "phRxDoctor", "phRxNo", "phRxDate", "phRxNote"].forEach(function (id) { if ($(id)) $(id).value = ""; });
+    clearRxState();
     CACHE = null;
     hydrated = false;
-    renderRxStatus();
   }
+  /* الإقلاع بعد سحب السحابة: نفضّ الوصفة بس، من غير ما نلغي حالة التحميل اللي وصلت
+     ( كان ON_BOOT_READY بينادي resetRx فتقفل بوابة البيع بعد ما البيانات نزلت فعلًا ). */
+  function onBootReady () { clearRxState(); }
   function ready () {
     // الوضع المحلي (بدون سحابة) ما عندهوش مصدر إجباري؛ أما في وضع السحابة لازم
     // تكون الدفعات نزلت فعلًا قبل ما بوابة الوصفة/الصلاحية تسمح بالبيع.
@@ -805,7 +809,7 @@
   /* ---------- الواجهة العامة المستخدمة من app.js ---------- */
   window.PHARMA = {
     attachApi: function (api) { A = api || A; bind(); },
-    onBootReady: function () { resetRx(); },
+    onBootReady: onBootReady,
     ready: ready,
     resetRx: resetRx,
     pharmaHydrate: pharmaHydrate,
