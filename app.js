@@ -9886,11 +9886,18 @@
     return pct;
   }
 
+  /* 🧾 بناء 12: «الصنف يتكتب في الفاتورة بالعربي أو بالإنجليزي بنفس المنطق».
+     كان البحث المرن بيقارن الكود/الباركود/الاسم العربي بس — الاسم الإنجليزي (nameEn)
+     كان موجود في بيانات الصنف ومتجاهل، فكتابة «Diclofenac» مثلًا ما كانتش بتطلع السطر.
+     نفس ترتيب المطابقة بالحرف: كود/باركود حرفي أولًا، بعدين جزئي في الكود أو أي اسم. */
   function findProductFlexible(q) {
     const n = normalizeAr(q);
     if (!n) return null;
     return products.find((p) => normalizeAr(p.code) === n || (p.barcode && normalizeAr(p.barcode) === n))
-      || products.find((p) => normalizeAr(p.code).includes(n) || normalizeAr(p.nameAr).includes(n) || (p.barcode && normalizeAr(p.barcode).includes(n)))
+      || products.find((p) => normalizeAr(p.code).includes(n)
+        || normalizeAr(p.nameAr).includes(n)
+        || normalizeAr(p.nameEn || "").includes(n)
+        || (p.barcode && normalizeAr(p.barcode).includes(n)))
       || null;
   }
 
@@ -10028,10 +10035,12 @@
     if (!q) return all;
     const hit = [];
     all.forEach((p) => {
+      // بناء 12: لوحة الاقتراحات كمان بتدور على الاسم الإنجليزي بنفس تطبيع arFold.
       const name = arFold(p.nameAr);
+      const nameEn = arFold(p.nameEn || "");
       const code = arFold(p.code == null ? "" : p.code);
       const bc = arFold(p.barcode == null ? "" : p.barcode);
-      if (name.indexOf(q) >= 0 || code.indexOf(q) >= 0 || bc.indexOf(q) >= 0) hit.push(p);
+      if (name.indexOf(q) >= 0 || nameEn.indexOf(q) >= 0 || code.indexOf(q) >= 0 || bc.indexOf(q) >= 0) hit.push(p);
     });
     return hit;
   }
