@@ -25941,7 +25941,9 @@ id: nextVoucherId(),
     // الصريح، وتحذف mizan_admin_get_password، وتحذف عمودَي plain_password/password_plain.
     "db/supabase-upgrade-58-hide-plain-passwords.sql",
     // 🆕 ترقية ٧٣ (ميزان فارما): دفعات/وصفات/صرف — اتنفّذت على المشروع المستقل 25/11.
-    "db/supabase-upgrade-73-pharma.sql"];
+    "db/supabase-upgrade-73-pharma.sql",
+    // 🆕 ترقية ٧٤ (ميزان فارما): عمودا آخر/متوسط سعر الشراء على products — اتنفّذت 25/11.
+    "db/supabase-upgrade-74-pharma-price-columns.sql"];
   // ملفات موجودة في db/ بس مش داخلة في نسخة النشر — كل واحد بسبب مكتوب.
   // ملفات rollback لا تدخل الحزمة.
   // بناء 141: ترقية ٥ـ (قفل التسجيل + دوال الرموز) **اتنفّذت** 5/10 ≈01:29 ⇒ دخلت FILES فوق
