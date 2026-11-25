@@ -136,14 +136,17 @@
     hydrated = true;
     try { renderBatches(); renderDispenses(); renderReports(); renderRxStatus(); } catch (e) { fail("رسم شاشات الصيدلية بعد التحميل", e); }
   }
-  function entry (productId, create) {
-    var d = load();
+  // بناء 11: نفس منطق entry لكن على نسخة محمّلة مرة واحدة — منع نسخ الكاش آلاف المرات.
+  function entryIn (d, productId, create) {
     var k = String(productId);
     if (!d.products[k] && create) d.products[k] = { meta: {}, batches: [] };
     var r = d.products[k] || { meta: {}, batches: [] };
     r.meta = r.meta && typeof r.meta === "object" ? r.meta : {};
     r.batches = Array.isArray(r.batches) ? r.batches : [];
     return { d: d, k: k, r: r };
+  }
+  function entry (productId, create) {
+    return entryIn(load(), productId, create);
   }
   function products () {
     return (A && typeof A.products === "function") ? (A.products() || []) : [];
@@ -200,6 +203,24 @@
       if (x !== y) return x.localeCompare(y);
       return String(a.id || "").localeCompare(String(b.id || ""));
     });
+  }
+  // بناء 11: كل الدفعات من نسخة واحدة محمّلة — ما فيش clone لكل صنف على حدة.
+  function collectBatchRows (d) {
+    var out = [];
+    products().forEach(function (p) {
+      var x = entryIn(d, p.id, false).r;
+      (x.batches || []).forEach(function (b) {
+        if (b && typeof b === "object") out.push({ p: p, b: b });
+      });
+    });
+    return out;
+  }
+  function sortedBatchRows (rows) {
+    var byRef = new Map();
+    rows.forEach(function (r) { byRef.set(r.b, r); });
+    return sortedBatches(rows.map(function (r) { return r.b; }))
+      .map(function (b) { return byRef.get(b) || null; })
+      .filter(Boolean);
   }
   function consumeBatches (batches, qty, wh) {
     var left = num(qty);
@@ -390,26 +411,16 @@
     var tb = $("phBatchesTable");
     if (!tb) return;
     var body = tb.querySelector("tbody");
-    body.innerHTML = "";
-    var rows = [];
-    products().forEach(function (p) {
-      var x = entry(p.id, false).r;
-      (x.batches || []).forEach(function (b) {
-        rows.push({ p: p, b: b });
-      });
-    });
-    rows = sortedBatches(rows.map(function (r) { return r.b; })).map(function (b) {
-      for (var i = 0; i < rows.length; i++) if (rows[i].b === b) return rows[i];
-      return null;
-    }).filter(Boolean);
+    // بناء 11: نسخة واحدة من الكاش + بحث Map بدل مقارنة كل صف بكل صف.
+    var rows = sortedBatchRows(collectBatchRows(load()));
     if (!rows.length) {
       body.innerHTML = '<tr><td colspan="7" class="invq-empty">مافيش دفعات مسجّلة لسه — سجّل أول دفعة من النموذج فوق.</td></tr>';
       return;
     }
-    rows.forEach(function (row) {
+    // سلسلة HTML واحدة بدل آلاف عمليات innerHTML/appendChild.
+    body.innerHTML = rows.map(function (row) {
       var p = row.p, b = row.b;
-      var tr = document.createElement("tr");
-      tr.innerHTML =
+      return '<tr data-pid="' + h(p.id) + '" data-bid="' + h(b.id) + '">' +
         "<td>" + h(p.nameAr || p.code) + "</td>" +
         "<td>" + h(b.no) + "</td>" +
         "<td>" + h(b.expiry || "—") + "</td>" +
@@ -417,47 +428,35 @@
         "<td>" + h(b.warehouse || "—") + "</td>" +
         "<td>" + badge(b) + "</td>" +
         '<td><button class="btn small teal" type="button" data-act="label">🏷️ ملصق</button> ' +
-        '<button class="btn small red" type="button" data-act="del">🗑️ حذف</button></td>';
-      tr.dataset.pid = String(p.id);
-      tr.dataset.bid = String(b.id);
-      body.appendChild(tr);
-    });
+        '<button class="btn small red" type="button" data-act="del">🗑️ حذف</button></td></tr>';
+    }).join("");
   }
   function renderDispenses () {
     var tb = $("phDispenseTable");
     if (!tb) return;
     var body = tb.querySelector("tbody");
-    var d = load();
-    var rows = (d.dispenses || []).slice(0, 400);
-    body.innerHTML = "";
+    var rows = (load().dispenses || []).slice(0, 400);
     if (!rows.length) {
       body.innerHTML = '<tr><td colspan="7" class="invq-empty">مافيش عمليات صرف مسجّلة لسه.</td></tr>';
       return;
     }
-    rows.forEach(function (r) {
-      var tr = document.createElement("tr");
-      tr.innerHTML =
+    body.innerHTML = rows.map(function (r) {
+      return '<tr data-rid="' + h(r.id) + '">' +
         "<td>" + h(r.date) + "</td>" +
         "<td>" + h(r.patient || "—") + "</td>" +
         "<td>" + h(r.nameAr || r.code) + "</td>" +
         "<td>" + money(r.qty) + "</td>" +
         "<td>" + h(r.batchNo) + "</td>" +
         "<td>" + h(r.invoiceNo) + "</td>" +
-        '<td><button class="btn small teal" type="button" data-act="rxlabel">🏷️ ملصق</button></td>';
-      tr.dataset.rid = String(r.id);
-      body.appendChild(tr);
-    });
+        '<td><button class="btn small teal" type="button" data-act="rxlabel">🏷️ ملصق</button></td></tr>';
+    }).join("");
   }
   function renderReports () {
     var k = $("phReportsKpis");
     var tb = $("phExpiryTable");
     if (!k || !tb) return;
     var d = load();
-    var all = [];
-    products().forEach(function (p) {
-      var x = entry(p.id, false).r;
-      (x.batches || []).forEach(function (b) { all.push({ p: p, b: b }); });
-    });
+    var all = collectBatchRows(d);
     var exp = all.filter(function (r) { return daysLeft(r.b.expiry) < 0; });
     var soon = all.filter(function (r) { var n = daysLeft(r.b.expiry); return n >= 0 && n <= 30; });
     var todayCount = (d.dispenses || []).filter(function (r) { return String(r.date) === today(); }).length;
@@ -467,19 +466,14 @@
       '<div class="pharma-kpi"><b>' + exp.length + "</b><span>دفعات منتهية</span></div>" +
       '<div class="pharma-kpi"><b>' + todayCount + "</b><span>عمليات صرف اليوم</span></div>";
     var body = tb.querySelector("tbody");
-    var rows = sortedBatches(all.map(function (r) { return r.b; })).map(function (b) {
-      for (var i = 0; i < all.length; i++) if (all[i].b === b) return all[i];
-      return null;
-    }).filter(Boolean);
-    body.innerHTML = "";
+    var rows = sortedBatchRows(all);
     if (!rows.length) {
       body.innerHTML = '<tr><td colspan="8" class="invq-empty">مافيش دفعات لتقرير الصلاحية.</td></tr>';
       return;
     }
-    rows.forEach(function (r) {
+    body.innerHTML = rows.map(function (r) {
       var days = daysLeft(r.b.expiry);
-      var tr = document.createElement("tr");
-      tr.innerHTML =
+      return "<tr>" +
         "<td>" + h(r.p.nameAr || r.p.code) + "</td>" +
         "<td>" + h(r.b.no) + "</td>" +
         "<td>" + h(r.b.expiry || "—") + "</td>" +
@@ -487,20 +481,14 @@
         "<td>" + money(r.b.cost) + "</td>" +
         "<td>" + money(num(r.b.qty) * num(r.b.cost)) + "</td>" +
         "<td>" + (days >= 99999 ? "—" : days) + "</td>" +
-        "<td>" + badge(r.b) + "</td>";
-      body.appendChild(tr);
-    });
+        "<td>" + badge(r.b) + "</td></tr>";
+    }).join("");
   }
   function renderRxStatus () {
     var el = $("phRxStatus");
     if (!el) return;
-    if (!RX.active) {
-      el.textContent = "حاليًا مفيش وصفة مفعّلة — أدخل البيانات واضغط «فتح شاشة البيع بالوصفة».";
-      return;
-    }
-    el.textContent = "✅ وصفة مفعّلة: " + (RX.patient || "بدون اسم مريض") +
-      " — الطبيب: " + (RX.doctor || "—") + " — رقم الوصفة: " + (RX.no || "—") +
-      " — هتُسجّل تلقائيًا مع أول فاتورة بيع.";
+    // بناء 11: الوصفة ملغية تمامًا — سجل الصرف بيتعمل تلقائيًا مع كل فاتورة.
+    el.textContent = "الصرف بيتسجّل تلقائيًا مع كل فاتورة مبيعات — مفيش روشته مطلوبة.";
   }
   function openView () {
     if (!A) return;
