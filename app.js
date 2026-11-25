@@ -8171,6 +8171,11 @@
     const s = Math.max(0, Math.floor(Number(it && it.stripsSelected) || 0));
     return n > 1 && s > 0 ? " (" + s + " من " + n + " شريط)" : "";
   }
+  /* 💊 بناء 15: سعر الشريط ممكن يكون له ٣ أو ٤ كسور عشرية (40.96 ÷ 20 = 2.048).
+     عرضه بـ `fmt` (منزلتين) كان بيخلي 2.048 × 5 = 10.24 تظهر للمستخدم كـ 2.05 × 5. */
+  function fmtUnitPrice(n) {
+    return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  }
 
   function discountStatusText(p) {
     const pct = Number(p.discountPercent) || 0;
@@ -10360,7 +10365,9 @@
       if (chosen > stripsPerBox) chosen = stripsPerBox;
       qty = chosen;
     }
-    if (!(typedPrice > 0) || stripsPerBox > 1) $("#txtPosPrice").value = moneyStr(price);
+    if (!(typedPrice > 0) || stripsPerBox > 1) {
+      $("#txtPosPrice").value = stripsPerBox > 1 ? fmtUnitPrice(price) : moneyStr(price);
+    }
     /* 🧾 بناء 283: «المتاح» من **مصدر قرار واحد** (`vanPosAvail` = متبقي رحلة عربية المندوب
        المفتوحة) — نفس اللي بيبني قائمة الأصناف وشارة الرصيد ونفس بوابة الحفظ (283).
        غير المندوب ⇒ `stockAt` بالحرف. الكتابة على المخزون برّه القرار (`addStockAt` ما اتلمستش). */
@@ -11340,7 +11347,7 @@
       const sel = tr.querySelector("select.strip-select");
       if (sel) sel.value = String(v);
       const pc = tr.querySelector(".c-fixed");
-      if (pc) pc.textContent = fmt(it.price);
+      if (pc) pc.textContent = fmtUnitPrice(it.price);
       const tx = tr.querySelector(".c-tax");
       if (tx) tx.textContent = fmt(it.tax);
       const tt = tr.querySelector(".c-total");
@@ -11370,7 +11377,7 @@
         '<td>' + esc(it.nameAr) + '</td>' +
         '<td>' + esc(lineUnitText(it)) + '</td>' +
         qtyCell +
-        '<td class="c-fixed">' + fmt(it.price) + '</td>' +
+        '<td class="c-fixed">' + (stripN > 1 ? fmtUnitPrice(it.price) : fmt(it.price)) + '</td>' +
         '<td><input class="cell-input" data-f="discount" type="text" value="' + fmt(it.discount) + '" /></td>' +
         '<td class="c-tax' + (TAX.enabled ? '' : ' tax-hidden') + '"' + (TAX.enabled ? '' : ' style="display:none"') + '>' + fmt(it.tax) + '</td>' +
         '<td class="c-total">' + fmt(it.total) + '</td>' +
@@ -11674,7 +11681,7 @@
         '<td style="text-align:right">' + esc((it.nameAr || "") + stripNoteText(it)) + returnedBadge(true, inv.id, it) + '</td>' +
         '<td>' + esc(lineUnitText(it)) + '</td>' +
         '<td>' + esc(Number(it.qty).toLocaleString("en-US")) + '</td>' +
-        '<td>' + fmt(it.price) + '</td>' +
+        '<td>' + ((it.stripsPerBox > 1) ? fmtUnitPrice(it.price) : fmt(it.price)) + '</td>' +
         '<td>' + fmt(it.discount) + '</td>' +
         (hasTax ? ('<td>' + fmt(it.tax) + '</td>') : '') +
         '<td>' + fmt(it.total) + '</td>';
@@ -27243,7 +27250,7 @@ id: nextVoucherId(),
         inp.value = String(chosen);
         const sel = tr.querySelector("select.strip-select");
         if (sel) sel.value = String(chosen);
-        tr.querySelector(".c-fixed").textContent = fmt(posItems[idx].price);
+        tr.querySelector(".c-fixed").textContent = fmtUnitPrice(posItems[idx].price);
       }
       posCalcRow(idx);
       tr.querySelector(".c-tax").textContent = fmt(posItems[idx].tax);

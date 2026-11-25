@@ -2893,7 +2893,8 @@ tr.jrn-reversed td { color: var(--text-secondary); text-decoration: line-through
   .inv-dgv tbody td.qty-with-strips { gap: 5px; }
   .strip-qty-pair { flex: 1 1 auto; flex-direction: row; align-items: center; gap: 4px; height: 40px; }
   .strip-select { flex: 1 1 auto; height: 40px; font-size: 13px; text-overflow: ellipsis; }
-  .qty-with-strips .cell-input { flex: 0 0 56px; width: 56px; height: 40px; font-size: 16px; }
+  /* خصوصية كاملة عشان قاعدة `.inv-dgv tbody td .cell-input` اللي فوق ما تاخدش الأولوية */
+  .inv-dgv tbody td.qty-with-strips .cell-input { flex: 0 0 56px; width: 56px; height: 40px; font-size: 16px; }
 
   /* (ح) عمود الصافي والسداد بقى بطاقة كاملة العرض: رقم الصافي بارز بس مش بيبتلع نص الشاشة */
   .pos-side { gap: 8px; }
