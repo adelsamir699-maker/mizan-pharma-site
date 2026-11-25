@@ -25978,7 +25978,11 @@ id: nextVoucherId(),
     // 🆕 ترقية ٧٦ (ميزان فارما): أعمدة stock_added / needs_reconcile لتزامن الدفعات والصرف.
     "db/supabase-upgrade-76-pharma-sync-flags.sql",
     // 🆕 ترقية ٧٧ (ميزان فارما): batch_refs في سجل الصرف — رجوع الدفعات عند الحذف/المرتجع.
-    "db/supabase-upgrade-77-pharma-batch-refs.sql"];
+    "db/supabase-upgrade-77-pharma-batch-refs.sql",
+    // 🆕 ترقية ٧٨ (ميزان فارما): تغطية جداول الصيدلية في النسخ/الاستعادة/التفريغ — اتنفّذت 25/11.
+    "db/supabase-upgrade-78-pharma-backup-coverage.sql",
+    // 🆕 ترقية ٧٩ (ميزان فارما): إعادة سجل الإجراءات السحابي mizan_log_activity (ترقية ٢٨ بالأصل).
+    "db/supabase-upgrade-79-activity-log.sql"];
   // ملفات موجودة في db/ بس مش داخلة في نسخة النشر — كل واحد بسبب مكتوب.
   // ملفات rollback لا تدخل الحزمة.
   // بناء 141: ترقية ٥ـ (قفل التسجيل + دوال الرموز) **اتنفّذت** 5/10 ≈01:29 ⇒ دخلت FILES فوق
