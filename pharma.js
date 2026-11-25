@@ -13,6 +13,8 @@
   var A = null;
   var bound = false;
   var LS_PHARMA = "mizan_pharma_data_v1";
+  var CACHE = null;     // نسخة محمّلة من Supabase؛ localStorage هو الـ fallback في الوضع المحلي
+  var hydrated = false; // بوابة البيع تستنى لحد ما البيانات تتنزّل قبل ما تفتح الشاشة
   var RX = { active: false, patient: "", doctor: "", no: "", date: "", note: "" };
 
   var META_FIELDS = {
@@ -61,6 +63,7 @@
   }
   function blank () { return { products: {}, dispenses: [] }; }
   function load () {
+    if (CACHE) return JSON.parse(JSON.stringify(CACHE));
     try {
       var d = JSON.parse(localStorage.getItem(storeKey()) || "null");
       if (!d || typeof d !== "object") return blank();
@@ -70,7 +73,62 @@
     } catch (e) { return blank(); }
   }
   function save (d) {
-    try { localStorage.setItem(storeKey(), JSON.stringify(d || blank())); } catch (e) { }
+    CACHE = JSON.parse(JSON.stringify(d || blank()));
+    try { localStorage.setItem(storeKey(), JSON.stringify(CACHE)); } catch (e) { }
+  }
+  function queueCloud (p, what) {
+    if (!p || typeof p.catch !== "function") return;
+    p.catch(function (e) {
+      try { console.warn("PHARMA cloud " + what, e); } catch (e2) { }
+      try { notify("تعذّر حفظ بيانات الصيدلية على السحابة — راجع الاتصال.", "warning"); } catch (e3) { }
+    });
+  }
+  function sqlDate (v) { var s = String(v == null ? "" : v).trim(); return s ? s.slice(0, 10) : ""; }
+
+  /* تحويل صفوف Supabase إلى نفس الشكل اللي بتستخدمه دوال الرسم/الصرف */
+  function pharmaHydrate (payload) {
+    // لو السحب فشل في وضع السحابة ما نفتحش البيع على نسخة localStorage قديمة.
+    if (!payload || !payload.meta) { hydrated = !(A && A.online); return; }
+    var d = blank();
+    (payload.meta || []).forEach(function (r) {
+      if (!r || r.deleted === true) return;
+      var k = String(r.local_id);
+      if (!d.products[k]) d.products[k] = { meta: {}, batches: [] };
+      d.products[k].meta = {
+        activeIngredient: r.active_ingredient || "",
+        manufacturer: r.manufacturer || "",
+        registrationNo: r.registration_no || "",
+        form: r.form || "",
+        strength: r.strength || "",
+        storage: r.storage || "",
+        notes: r.notes || "",
+        rxRequired: r.rx_required === true
+      };
+    });
+    (payload.batches || []).forEach(function (r) {
+      if (!r || r.deleted === true) return;
+      var k = String(r.product_local_id);
+      if (!d.products[k]) d.products[k] = { meta: {}, batches: [] };
+      d.products[k].batches.push({
+        id: String(r.local_id), no: r.batch_no || "", expiry: sqlDate(r.expiry_date),
+        qty: num(r.qty), cost: num(r.cost), warehouse: r.warehouse || "",
+        status: r.status || "active", stockAdded: r.stock_added === true
+      });
+    });
+    d.dispenses = (payload.dispenses || []).filter(function (r) { return r && r.deleted !== true; }).map(function (r) {
+      return {
+        id: String(r.local_id), date: sqlDate(r.doc_date), invoiceNo: r.invoice_no || "",
+        saleId: r.sale_local_id, productId: r.product_local_id, code: r.product_code || "",
+        nameAr: r.product_name || "", qty: num(r.qty), batchNo: r.batch_info || "",
+        expiry: sqlDate(r.expiry_date), patient: r.patient_name || "", doctor: r.doctor_name || "",
+        rxNo: r.rx_no || "", needsReconcile: r.needs_reconcile === true,
+        batchRefs: Array.isArray(r.batch_refs) ? r.batch_refs : [], note: r.notes || ""
+      };
+    });
+    CACHE = d;
+    try { localStorage.setItem(storeKey(), JSON.stringify(CACHE)); } catch (e) { }
+    hydrated = true;
+    try { renderBatches(); renderDispenses(); renderReports(); renderRxStatus(); } catch (e) { }
   }
   function entry (productId, create) {
     var d = load();
@@ -140,7 +198,9 @@
   }
   function consumeBatches (batches, qty, wh) {
     var left = num(qty);
+    var taken = 0;
     var lines = [];
+    var used = [];
     var firstExpiry = "";
     var list = sortedBatches(liveBatches(batches, wh));
     for (var i = 0; i < list.length && left > 0.00001; i++) {
@@ -148,10 +208,47 @@
       var take = Math.min(left, num(b.qty));
       b.qty = num(num(b.qty) - take);
       left = num(left - take);
+      taken = num(taken + take);
+      used.push({ id: String(b.id), qty: take, no: b.no || "", expiry: b.expiry || "", warehouse: b.warehouse || wh || "" });
       lines.push(String(b.no || "—") + " (" + (b.expiry || "—") + ") × " + money(take));
       if (!firstExpiry) firstExpiry = b.expiry || "";
     }
-    return { lines: lines, firstExpiry: firstExpiry, ok: left <= 0.00001 };
+    return { lines: lines, firstExpiry: firstExpiry, taken: taken, used: used, ok: left <= 0.00001 };
+  }
+
+  /* ---------- تحويل السجلات المحلية إلى صفوف Supabase ---------- */
+  function cloudBatchRow (b, p) {
+    return {
+      local_id: String(b.id), product_local_id: Number(p && p.id), product_code: (p && p.code) || "",
+      batch_no: b.no || "", expiry_date: sqlDate(b.expiry) || null, qty: num(b.qty), cost: num(b.cost),
+      warehouse: b.warehouse || "", status: b.status === "blocked" ? "blocked" : "active",
+      stock_added: b.stockAdded === true, deleted: false
+    };
+  }
+  function cloudMetaRow (m, p) {
+    return {
+      local_id: Number(p && p.id), product_code: (p && p.code) || "",
+      active_ingredient: m.activeIngredient || "", manufacturer: m.manufacturer || "",
+      registration_no: m.registrationNo || "", form: m.form || "", strength: m.strength || "",
+      storage: m.storage || "", rx_required: !!m.rxRequired, notes: m.notes || "", deleted: false
+    };
+  }
+  function cloudDispenseRow (r) {
+    return {
+      local_id: String(r.id), sale_local_id: r.saleId != null ? Number(r.saleId) : null,
+      invoice_no: r.invoiceNo || "", doc_date: sqlDate(r.date) || null,
+      product_local_id: Number(r.productId), product_code: r.code || "", product_name: r.nameAr || "",
+      qty: num(r.qty), batch_info: r.batchNo || "", expiry_date: sqlDate(r.expiry) || null,
+      patient_name: r.patient || "", doctor_name: r.doctor || "", rx_no: r.rxNo || "",
+      notes: r.note || "", needs_reconcile: r.needsReconcile === true,
+      batch_refs: Array.isArray(r.batchRefs) ? r.batchRefs : [], deleted: r.deleted === true
+    };
+  }
+  function cloudUpsert (table, row) {
+    return (A && typeof A.pharmaUpsert === "function") ? A.pharmaUpsert(table, row) : null;
+  }
+  function cloudRemove (table, localId) {
+    return (A && typeof A.pharmaRemove === "function") ? A.pharmaRemove(table, localId) : null;
   }
 
   /* ---------- بوابة البيع ---------- */
@@ -193,11 +290,31 @@
       var x = d.products[String(p.id)] || { meta: {}, batches: [] };
       x.batches = Array.isArray(x.batches) ? x.batches : [];
       var alloc = consumeBatches(x.batches, it.qty, wh);
+      var short = alloc.ok ? 0 : num(num(it.qty) - alloc.taken);
+      // الفاتورة بيتخصم رصيدها قبل استدعاء الهوك — لو الدفعات ما كفتش، نرجّع الفرق عشان
+      // الرصيد يفضل مطابق لمجموع الدفعات، ونعلّم الصرف إنه محتاج مراجعة.
+      if (short > 0 && A && typeof A.addStockAt === "function") {
+        try { A.addStockAt(p, wh, short); A.saveProducts(); } catch (e) { }
+        notify("الكمية المتاحة من الدفعات (" + money(alloc.taken) + ") أقل من الكمية المصروفة (" +
+          money(it.qty) + ") — تمت تسوية الرصيد. راجع الدفعات.", "warning");
+      }
       d.products[String(p.id)] = x;
+      var refs = (alloc.used || []).map(function (u) {
+        return { id: u.id, qty: u.qty, no: u.no, expiry: u.expiry, warehouse: u.warehouse, productId: p.id };
+      });
+      alloc.used.forEach(function (u) {
+        for (var j = 0; j < x.batches.length; j++) {
+          if (String(x.batches[j].id) === String(u.id)) {
+            queueCloud(cloudUpsert("pharma_batches", cloudBatchRow(x.batches[j], p)), "batch dispense");
+            break;
+          }
+        }
+      });
       recs.push({
         id: "d" + Date.now() + "-" + i,
         date: inv.invoiceDate || inv.date || today(),
         invoiceNo: inv.invoiceNumber || inv.invoiceNo || "",
+        saleId: inv.id != null ? inv.id : (inv.saleId != null ? inv.saleId : null),
         productId: p.id,
         code: it.code || p.code || "",
         nameAr: it.nameAr || p.nameAr || "",
@@ -207,12 +324,15 @@
         patient: RX.active ? RX.patient : "",
         doctor: RX.active ? RX.doctor : "",
         rxNo: RX.active ? RX.no : "",
-        note: RX.active ? RX.note : ""
+        needsReconcile: short > 0,
+        batchRefs: refs,
+        note: (RX.active ? RX.note : "") + (short > 0 ? " | راجع تخصيص الدفعات" : "")
       });
     }
     if (!recs.length) return;
     d.dispenses = recs.concat(d.dispenses || []).slice(0, 4000);
     save(d);
+    recs.forEach(function (r) { queueCloud(cloudUpsert("pharma_dispenses", cloudDispenseRow(r)), "dispense save"); });
     RX = { active: false, patient: "", doctor: "", no: "", date: "", note: "" };
     renderRxStatus();
     renderBatches();
@@ -340,7 +460,7 @@
     }).filter(Boolean);
     body.innerHTML = "";
     if (!rows.length) {
-      body.innerHTML = '<tr><td colspan="6" class="invq-empty">مافيش دفعات لتقرير الصلاحية.</td></tr>';
+      body.innerHTML = '<tr><td colspan="8" class="invq-empty">مافيش دفعات لتقرير الصلاحية.</td></tr>';
       return;
     }
     rows.forEach(function (r) {
@@ -351,6 +471,8 @@
         "<td>" + h(r.b.no) + "</td>" +
         "<td>" + h(r.b.expiry || "—") + "</td>" +
         "<td>" + money(r.b.qty) + "</td>" +
+        "<td>" + money(r.b.cost) + "</td>" +
+        "<td>" + money(num(r.b.qty) * num(r.b.cost)) + "</td>" +
         "<td>" + (days >= 99999 ? "—" : days) + "</td>" +
         "<td>" + badge(r.b) + "</td>";
       body.appendChild(tr);
@@ -416,14 +538,18 @@
     var x = entry(p.id, true);
     var clash = x.r.batches.some(function (b) { return String(b.no) === no && String(b.warehouse || "") === wh; });
     if (clash) { notify("رقم الدفعة ده مسجّل قبل كده لنفس الصنف والمستودع.", "warning"); return; }
-    x.r.batches.push({
+    var addStock = $("phBatchAddStock");
+    var stockAdded = !!(addStock && addStock.checked);
+    var batch = {
       id: "b" + Date.now() + "-" + Math.floor(Math.random() * 10000),
       no: no, expiry: exp, qty: qty, cost: cost, warehouse: wh,
+      stockAdded: stockAdded,
       status: "active", addedAt: new Date().toISOString()
-    });
+    };
+    x.r.batches.push(batch);
     save(x.d);
-    var addStock = $("phBatchAddStock");
-    if (addStock && addStock.checked && A) {
+    queueCloud(cloudUpsert("pharma_batches", cloudBatchRow(batch, p)), "batch save");
+    if (stockAdded && A) {
       try { A.addStockAt(p, wh, qty); A.saveProducts(); } catch (e) { }
     }
     if (A && typeof A.addActivity === "function") {
@@ -443,10 +569,12 @@
     }
     if (idx < 0) return;
     var b = x.r.batches[idx];
-    if (!confirm("هل تحذف الدفعة «" + b.no + "»؟" + (num(b.qty) > 0 ? "\nالكمية المتبقية (" + money(b.qty) + ") هتخصم من رصيد المخزون." : ""))) return;
+    if (!confirm("هل تحذف الدفعة «" + b.no + "»؟" + (num(b.qty) > 0 && b.stockAdded === true ? "\nالكمية المتبقية (" + money(b.qty) + ") هتخصم من رصيد المخزون." : ""))) return;
     x.r.batches.splice(idx, 1);
     save(x.d);
-    if (num(b.qty) > 0 && A) {
+    queueCloud(cloudRemove("pharma_batches", b.id), "batch delete");
+    // الدفعات القديمة اللي قبل العلم ده اعتبرها «ما أضافتش رصيد» عشان ما يحصلش سالب.
+    if (num(b.qty) > 0 && b.stockAdded === true && A) {
       try { A.addStockAt(findProduct(pid), b.warehouse, -num(b.qty)); A.saveProducts(); } catch (e) { }
     }
     renderBatches();
@@ -512,6 +640,131 @@
     notify("تم إلغاء الوصفة.", "info");
   }
 
+  /* 🔒 الخروج/تغيير الشركة: الوصفة المفعّلة والكاش ما ينتقلوش لحساب تاني.
+     بنفضّ الكاش كمان عشان أي دخول تاني يسحب من Supabase قبل ما البيع يفتح. */
+  function resetRx () {
+    RX = { active: false, patient: "", doctor: "", no: "", date: "", note: "" };
+    ["phRxPatient", "phRxDoctor", "phRxNo", "phRxDate", "phRxNote"].forEach(function (id) { if ($(id)) $(id).value = ""; });
+    CACHE = null;
+    hydrated = false;
+    renderRxStatus();
+  }
+  function ready () {
+    // الوضع المحلي (بدون سحابة) ما عندهوش مصدر إجباري؛ أما في وضع السحابة لازم
+    // تكون الدفعات نزلت فعلًا قبل ما بوابة الوصفة/الصلاحية تسمح بالبيع.
+    return !(A && A.online) || hydrated === true;
+  }
+  function hydrateFromCloud () {
+    if (!A || typeof A.pharmaPull !== "function") return;
+    var p = A.pharmaPull().then(function (ph) { pharmaHydrate(ph); }, function (e) { pharmaHydrate(null); });
+    queueCloud(p, "hydrate");
+  }
+
+  /* ↩️ حذف/مرتجع الفاتورة: نرجّع الكمية اللي اتصرفت من الدفعات (بمعرفاتها)
+     ونعلّم سجل الصرف إنه اترجّع، بدل ما الرصيد يكبر والدفعات تفضل ناقصة. */
+  function restoreSale (payload) {
+    var inv = (payload && payload.invoice) || {};
+    var saleId = inv.id != null ? inv.id : (payload && payload.saleId != null ? payload.saleId : null);
+    var invNo = inv.invoiceNumber || inv.invoiceNo || (payload && payload.invoiceNo) || "";
+    var items = (payload && payload.items) || [];
+    var wanted = {};
+    items.forEach(function (it) {
+      if (!it || it.productId == null) return;
+      var k = String(it.productId);
+      wanted[k] = num(num(wanted[k] || 0) + num(it.qty));
+    });
+    var partial = Object.keys(wanted).length > 0;
+    var d = load();
+    var changed = false;
+    (d.dispenses || []).forEach(function (r) {
+      var matchSale = saleId != null && r.saleId != null && String(r.saleId) === String(saleId);
+      var matchNo = !!invNo && String(r.invoiceNo || "") === String(invNo);
+      if ((!matchSale && !matchNo) || r.deleted === true) return;
+      var rk = String(r.productId);
+      if (partial && wanted[rk] == null) return;
+      var need = partial ? num(wanted[rk]) : num(r.qty);
+      var restored = 0;
+      (r.batchRefs || []).forEach(function (ref) {
+        if (need <= 0.00001) return;
+        var pid = ref.productId != null ? ref.productId : r.productId;
+        if (partial && String(pid) !== rk) return;
+        var take = Math.min(need, num(ref.qty));
+        if (take <= 0.00001) return;
+        var p = findProduct(pid);
+        var x = entry(pid, false);
+        var b = null;
+        for (var i = 0; i < x.r.batches.length; i++) {
+          if (String(x.r.batches[i].id) === String(ref.id)) { b = x.r.batches[i]; break; }
+        }
+        if (!b) {
+          b = { id: String(ref.id), no: ref.no || "", expiry: ref.expiry || "", qty: 0,
+                cost: 0, warehouse: ref.warehouse || "", status: "active", stockAdded: false };
+          x.r.batches.push(b);
+        }
+        b.qty = num(num(b.qty) + take);
+        x.d.products[String(pid)] = x.r;
+        queueCloud(cloudUpsert("pharma_batches", cloudBatchRow(b, p)), "batch restore");
+        restored = num(restored + take);
+        need = num(need - take);
+      });
+      if (restored <= 0.00001) return;
+      if (partial) wanted[rk] = need;
+      r.qty = num(Math.max(0, num(r.qty) - restored));
+      var full = num(r.qty) <= 0.00001;
+      if (full) r.deleted = true;
+      else r.note = String(r.note || "") + " | رُجّع جزئيًا";
+      changed = true;
+      queueCloud(cloudUpsert("pharma_dispenses", cloudDispenseRow(r)), "dispense reverse");
+    });
+    if (!changed) return;
+    save(d);
+    renderBatches();
+    renderDispenses();
+    renderReports();
+  }
+
+  /* ↩️ حذف مرتجع: الرصيد اتخصم تاني في app.js — نخصم الدفعات كمان ونفعل سجل الصرف. */
+  function reconsumeSale (payload) {
+    var inv = (payload && payload.invoice) || {};
+    var saleId = inv.id != null ? inv.id : (payload && payload.saleId != null ? payload.saleId : null);
+    var invNo = inv.invoiceNumber || inv.invoiceNo || (payload && payload.invoiceNo) || "";
+    var wh = (payload && payload.warehouse) || "";
+    var d = load();
+    var changed = false;
+    (d.dispenses || []).forEach(function (r) {
+      var matchSale = saleId != null && r.saleId != null && String(r.saleId) === String(saleId);
+      var matchNo = !!invNo && String(r.invoiceNo || "") === String(invNo);
+      if ((!matchSale && !matchNo) || r.deleted !== true) return;
+      var refs = r.batchRefs || [];
+      if (!refs.length) {
+        var x0 = entry(r.productId, false);
+        consumeBatches(x0.r.batches, r.qty, wh);
+        x0.r.batches.forEach(function (b) {
+          queueCloud(cloudUpsert("pharma_batches", cloudBatchRow(b, findProduct(r.productId))), "batch reconsume");
+        });
+      }
+      refs.forEach(function (ref) {
+        var pid = ref.productId != null ? ref.productId : r.productId;
+        var x = entry(pid, false);
+        for (var i = 0; i < x.r.batches.length; i++) {
+          var b = x.r.batches[i];
+          if (String(b.id) !== String(ref.id)) continue;
+          b.qty = num(Math.max(0, num(b.qty) - num(ref.qty)));
+          queueCloud(cloudUpsert("pharma_batches", cloudBatchRow(b, findProduct(pid))), "batch reconsume");
+          break;
+        }
+      });
+      r.deleted = false;
+      changed = true;
+      queueCloud(cloudUpsert("pharma_dispenses", cloudDispenseRow(r)), "dispense restore");
+    });
+    if (!changed) return;
+    save(d);
+    renderBatches();
+    renderDispenses();
+    renderReports();
+  }
+
   function bind () {
     if (bound) return;
     bound = true;
@@ -519,7 +772,7 @@
     b = $("phBatchSave"); if (b) b.addEventListener("click", saveBatch);
     b = $("phRxStart"); if (b) b.addEventListener("click", startRx);
     b = $("phRxClear"); if (b) b.addEventListener("click", clearRx);
-    b = $("pharmaBtnRefresh"); if (b) b.addEventListener("click", openView);
+    b = $("pharmaBtnRefresh"); if (b) b.addEventListener("click", function () { hydrateFromCloud(); openView(); });
     b = $("pharmaBtnPrint"); if (b) b.addEventListener("click", printReport);
     var bt = $("phBatchesTable");
     if (bt) bt.addEventListener("click", function (ev) {
@@ -552,7 +805,13 @@
   /* ---------- الواجهة العامة المستخدمة من app.js ---------- */
   window.PHARMA = {
     attachApi: function (api) { A = api || A; bind(); },
-    onBootReady: function () { },
+    onBootReady: function () { resetRx(); },
+    ready: ready,
+    resetRx: resetRx,
+    pharmaHydrate: pharmaHydrate,
+    hydrateFromCloud: hydrateFromCloud,
+    restoreSale: restoreSale,
+    reconsumeSale: reconsumeSale,
     openView: openView,
     productDialogOpen: function (p) { fillMetaForm(p && p.product ? p.product : null); },
     productSaved: function (p) {
@@ -561,6 +820,7 @@
       var x = entry(product.id, true);
       x.r.meta = readMetaForm();
       save(x.d);
+      queueCloud(cloudUpsert("pharma_product_meta", cloudMetaRow(x.r.meta, product)), "meta save");
     },
     validateSale: validateSale,
     posInvoiceSaved: posInvoiceSaved

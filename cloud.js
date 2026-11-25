@@ -2153,7 +2153,69 @@
     });
   }
 
+  /* ================= 💊 ميزان فارما — جسر جداول الصيدلية =================
+     الجداول الثلاثة (pharma_product_meta / pharma_batches / pharma_dispenses)
+     معرّفها المحلي نصّي في الدفعات والصرف، فما تدخلش في مسار detUuid/pushSubsetRows
+     اللي بيفترض أرقام. ليها مسار مباشر مستقل: قراءة كاملة مقصورة على الشركة،
+     ورفع/حذف بـ (org_id, local_id). العزل كله وراء RLS الموجود في ترقية ٧٣. */
+  var PHARMA_TABLES = ["pharma_product_meta", "pharma_batches", "pharma_dispenses"];
+  function pharmaOnline() {
+    return !!(DATA && typeof DATA.isOnline === "function" && DATA.isOnline() &&
+      typeof DATA.client === "function" && DATA.client());
+  }
+  function pharmaDate(v) {
+    var s = String(v == null ? "" : v).trim();
+    return s ? s.slice(0, 10) : null;
+  }
+  function pharmaPull() {
+    if (!pharmaOnline() || !DATA.orgId()) return Promise.resolve(null);
+    return Promise.all(PHARMA_TABLES.map(function (t) {
+      return DATA.readComplete(t, { select: "*", order: [["created_at", true], ["local_id", true]] });
+    })).then(function (parts) {
+      return { meta: parts[0] || [], batches: parts[1] || [], dispenses: parts[2] || [] };
+    }).catch(function (e) {
+      console.warn("pharma pull failed", e);
+      return null;
+    });
+  }
+  function pharmaUpsert(table, row) {
+    if (PHARMA_TABLES.indexOf(table) < 0) return Promise.resolve({ error: new Error("bad pharma table") });
+    if (!pharmaOnline() || !DATA.orgId()) return Promise.resolve({ skipped: true });
+    var payload = Object.assign({}, row || {});
+    if (!payload.org_id) payload.org_id = DATA.orgId();
+    if (payload.deleted === undefined) payload.deleted = false;
+    // حدّد معرّف الصف الموجود قبل الرفع — من غير كده كل تعديل على دفعة يولّد uuid جديد
+    // ويبدّل المفتاح الأساسي، فأي رابط قديم بالصف ينكسر.
+    return DATA.client().from(table).select("id")
+      .eq("org_id", DATA.orgId()).eq("local_id", payload.local_id)
+      .maybeSingle()
+      .then(function (found) {
+        if (found && found.data && found.data.id) payload.id = found.data.id;
+        else delete payload.id;   // صف جديد: القاعدة تولّد uuid
+        return DATA.client().from(table).upsert(payload, { onConflict: "org_id,local_id" });
+      })
+      .then(function (r) {
+        if (r.error) console.warn("pharma upsert " + table, r.error);
+        return r;
+      })
+      .catch(function (e) { console.warn("pharma upsert " + table, e); return { error: e }; });
+  }
+  function pharmaRemove(table, localId) {
+    if (PHARMA_TABLES.indexOf(table) < 0) return Promise.resolve({ error: new Error("bad pharma table") });
+    if (!pharmaOnline() || !DATA.orgId() || localId == null) return Promise.resolve({ skipped: true });
+    return DATA.client().from(table).delete()
+      .eq("org_id", DATA.orgId()).eq("local_id", String(localId))
+      .then(function (r) {
+        if (r.error) console.warn("pharma delete " + table, r.error);
+        return r;
+      })
+      .catch(function (e) { console.warn("pharma delete " + table, e); return { error: e }; });
+  }
+
   window.CLOUD = {
+    pharmaPull: pharmaPull,
+    pharmaUpsert: pharmaUpsert,
+    pharmaRemove: pharmaRemove,
     push: push,
     setTreasuryOpening: setTreasuryOpening,
     pushRows: pushRows,

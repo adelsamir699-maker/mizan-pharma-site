@@ -27,6 +27,24 @@
     }
   }
 
+  /* 💊 بوابة إلزامية: في نسخة الصيدلية فحص الوصفة/الدفعات لازم يشتغل.
+     غياب الطبقة أو أي استثناء يمنع البيع بدل ما يمرّ بصمت (fail-closed). */
+  function pharmaValidate(name, payload) {
+    if (name === "validateSale" && window.PHARMA && typeof window.PHARMA.ready === "function" && !window.PHARMA.ready()) {
+      return "بيانات الصيدلية لسه بتتنزّل من السحابة — استنّي ثانية وجرّب تاني.";
+    }
+    var fn = window.PHARMA && window.PHARMA[name];
+    if (typeof fn !== "function") {
+      return "نظام الصيدلية غير محمّل حاليًا — أجّل الفاتورة لحد ما يتحمل.";
+    }
+    try {
+      return fn(payload || {}) || "";
+    } catch (e) {
+      try { console.warn("PHARMA validator", name, e); } catch (e2) { }
+      return "تعذّر إتمام فحص الصيدلية: " + ((e && e.message) || "خطأ غير معروف");
+    }
+  }
+
   /* ================== التخزين ================== */
   const LS_CUSTOMERS = "mizan_customers_v1";
   const LS_TXS = "mizan_txs_v1";
@@ -11307,14 +11325,10 @@
       toast("لا يوجد رصيد كافٍ للأصناف التالية:\n" + shortages.join("\n"), "warning");
       return;
     }
-    // 💊 ميزان فارما: بوابة الدفعات/الوصفات — قبل أي أثر في الفاتورة (مخزون/خزينة/قيود)
-    try {
-      var _phValidate = window.PHARMA && window.PHARMA.validateSale;
-      if (typeof _phValidate === "function") {
-        var _phMsg = _phValidate({ items: posItems, warehouse: warehouse });
-        if (_phMsg) { toast(_phMsg, "warning"); return; }
-      }
-    } catch (e) { }
+    // 💊 ميزان فارما: بوابة الدفعات/الوصفات — قبل أي أثر في الفاتورة (مخزون/خزينة/قيود).
+    // فشل الطبقة أو غيابها يوقف البيع (fail-closed) بدل ما الفاتورة تمر من غير فحص.
+    var _phMsg = pharmaValidate("validateSale", { items: posItems, warehouse: warehouse });
+    if (_phMsg) { toast(_phMsg, "warning"); return; }
 
     const t = posRecalc();
     // 🆕 بناء 199 (مواصفة المالك): «الدفع» بقى **مشتق** من سطور السداد — «آجل» = فيه جزء على
@@ -13536,6 +13550,9 @@
       for (const p of plan) {
         if (fundsBlocked(p.tr, p.amount)) return;
       }
+      // 💊 رجّع دفعات الصيدلية لسجلاتها الأصلية قبل ما الفاتورة تتحذف،
+      // عشان المخزون ومجموع الدفعات يفضلوا متطابقين.
+      pharmaEmit("restoreSale", { invoice: inv, items: items, warehouse: wh, saleId: inv.id });
     }
     /* 🧱 بناء 218: حذف الفاتورة يلغي أي شيك معلّق/مرتجع مربوط بها بالكامل نظيفًا
        بلا رسائل تأكيد مربكة وبلا اختلاق أرصدة دائنة وهمية أو قيود CHKEEP معلّقة. */
@@ -13882,6 +13899,8 @@
     const prod = products.find((x) => Number(x.id) === Number(it.productId));
     if (prod) addStockAt(prod, wh, Number(it.qty) || 0);
     if (prod) saveProducts();
+    // 💊 السطر ده بس هو اللي اترجّع — نرجّع الدفعات والصرف بنفس الكمية (قبل تعديل inv.items).
+    if (isSales) pharmaEmit("restoreSale", { invoice: inv, saleId: inv.id, items: [it], warehouse: wh, lineIndex: idx });
 
     /* 2) القيد القديم يتراجع كله الأول (بنية نفس مفتاح refId — إزالة قبل الكتابة) */
     const goneJ = removeInvoiceJournal("sale", inv);
@@ -14819,6 +14838,8 @@ id: nextVoucherId(),
     // 3) الحفظ + التسلسل + سجل النشاط
     retList(isSales).push(rec);
     if (isSales) saveSaleReturns(); else savePurchaseReturns();
+    // 💊 مرتجع البيع يرجّع الكمية للدفعات ويعلّم سجل الصرف (جزئيًا لو المرتجع جزئي).
+    if (isSales) pharmaEmit("restoreSale", { invoice: inv, items: items, warehouse: wh, return: rec, saleId: inv.id });
     commitInvoiceSeq(retKind(isSales), invEncodedOf(no));
     addActivity("مرتجع " + retWord(isSales),
       "مرتجع رقم (" + no + ") على فاتورة " + retInvoiceNo(inv) + " - " + retParty(inv, isSales) +
@@ -14882,6 +14903,8 @@ id: nextVoucherId(),
       if (p) addStockAt(p, wh, isSales ? -(Number(it.qty) || 0) : (Number(it.qty) || 0));
     });
     saveProducts();
+    // 💊 حذف المرتجع يعيد خصم الدفعات اللي كانت رُجّعت ويفعّل سجل الصرف تاني.
+    if (isSales) pharmaEmit("reconsumeSale", { invoice: inv, items: items, warehouse: wh, return: r, saleId: r.saleId });
     // 2) عكس التسوية (بناء 172: ممكن تكون مختلطة كاش + رصيد)
     const hasCash = retCashOf(r) > 0.0001;
     const hasBalance = retBalOf(r) > 0.0001;
@@ -18828,6 +18851,10 @@ id: nextVoucherId(),
       toast("الكمية أكبر من حمولة سيارة " + car + ":\n" + short.join("\n"), "warning");
       return;
     }
+    // 💊 بوابة الصيدلية في مسار المندوب/السيارة كمان — نفس فحص الوصفة والدفعات،
+    // والمستودع هنا هو السيارة (car) اللي فعليًا بيخصم منه الرصيد.
+    var _phMsg = pharmaValidate("validateSale", { items: posItems, warehouse: car });
+    if (_phMsg) { toast(_phMsg, "warning"); return; }
     const t = posRecalc();
     if (!(t.grand > 0)) { toast("الإجمالي صفر.", "warning"); return; }
     const _overMsg = posPayOverError("sale", t.grand);
@@ -18946,6 +18973,8 @@ id: nextVoucherId(),
     commitInvoiceSeq("sale", invEncodedOf(invNoOf(invoice)));
     const postedJ = postInvoiceJournal("sale", invoice, null);
     try { postCogsJournal(invoice); } catch (e) { }
+    // 💊 تسجيل الصرف وتحديث الدفعات بعد ما الفاتورة اتحفظت فعلًا (زي مسار البيع العادي).
+    pharmaEmit("posInvoiceSaved", { invoice: invoice, items: invoice.items, warehouse: car });
     consumeAvgForItems(posItems);
     try {
       addActivity("بيع من سيارة", "سيارة " + car + " - " + cust.nameAr + " - " + fmt(t.grand) + " ج.م (" +
@@ -25943,7 +25972,13 @@ id: nextVoucherId(),
     // 🆕 ترقية ٧٣ (ميزان فارما): دفعات/وصفات/صرف — اتنفّذت على المشروع المستقل 25/11.
     "db/supabase-upgrade-73-pharma.sql",
     // 🆕 ترقية ٧٤ (ميزان فارما): عمودا آخر/متوسط سعر الشراء على products — اتنفّذت 25/11.
-    "db/supabase-upgrade-74-pharma-price-columns.sql"];
+    "db/supabase-upgrade-74-pharma-price-columns.sql",
+    // 🆕 ترقية ٧٥ (ميزان فارما): استثناء adel من قفل الجهاز — اتنفّذت 25/11.
+    "db/supabase-upgrade-75-pharma-owner-session-exempt.sql",
+    // 🆕 ترقية ٧٦ (ميزان فارما): أعمدة stock_added / needs_reconcile لتزامن الدفعات والصرف.
+    "db/supabase-upgrade-76-pharma-sync-flags.sql",
+    // 🆕 ترقية ٧٧ (ميزان فارما): batch_refs في سجل الصرف — رجوع الدفعات عند الحذف/المرتجع.
+    "db/supabase-upgrade-77-pharma-batch-refs.sql"];
   // ملفات موجودة في db/ بس مش داخلة في نسخة النشر — كل واحد بسبب مكتوب.
   // ملفات rollback لا تدخل الحزمة.
   // بناء 141: ترقية ٥ـ (قفل التسجيل + دوال الرموز) **اتنفّذت** 5/10 ≈01:29 ⇒ دخلت FILES فوق
@@ -26682,6 +26717,20 @@ id: nextVoucherId(),
       warehouses: function () { return warehouseList(); },
       todayISO: function () { return todayISO(); },
       orgId: function () { return (window.DATA && window.DATA.orgId) ? window.DATA.orgId() : null; },
+      online: function () { return !!A.online; },
+      // 💊 جسر جداول الصيدلية على Supabase (نفس دوال البرنامج، من غير لمس الدخول/الدعوات)
+      pharmaPull: function () {
+        return (window.CLOUD && window.CLOUD.pharmaPull)
+          ? window.CLOUD.pharmaPull() : Promise.resolve(null);
+      },
+      pharmaUpsert: function (table, row) {
+        return (window.CLOUD && window.CLOUD.pharmaUpsert)
+          ? window.CLOUD.pharmaUpsert(table, row) : Promise.resolve({ skipped: true });
+      },
+      pharmaRemove: function (table, localId) {
+        return (window.CLOUD && window.CLOUD.pharmaRemove)
+          ? window.CLOUD.pharmaRemove(table, localId) : Promise.resolve({ skipped: true });
+      },
       esc: function (s) { return esc(s); },
       fmt: function (n) { return fmt(n); }
     });
@@ -27919,6 +27968,8 @@ const pwEye = document.getElementById("btnShowPass");
   //       السحابة (`mergeCloudLocal` + `rowPushersMarkChanged`) ⇒ السطر اللي لسه ما
   //       رفعش اتشل يرفع نفسه، بدل ما يتمسح من الجهاز.
   function resetSessionState() {
+    // 💊 الوصفة المفعّلة والكاش الصيدلاني خاصّان بالجلسة السابقة — يتفضلّوا قبل الدخول.
+    pharmaEmit("resetRx");
     window.__isOwner = false;
     csetData = null;
     ssetData = null;
@@ -27960,6 +28011,9 @@ const pwEye = document.getElementById("btnShowPass");
     // نمسح لو: الحالة مختومة بشركة تانية، أو بلا ختم أصلًا (بقايا حساب سابق/
     // لقطة قرص/جهاز جديد) — الختم بيتحط بعد كل دخول ناجح من السحابة.
     if (owned !== org) {
+      // 💊 كاش الصيدلية (localStorage + الذاكرة) مش داخل LS_ALL_KEYS — نفضّه هنا عشان
+      // بيانات شركة ما تظهرش في شركة تانية حتى قبل ما السحابة تنزل.
+      pharmaEmit("resetRx");
       wipeLocalTables();
       try { localStorage.removeItem(LS_SRC_ORG); } catch (e) { }
       // الختم الجديد: من لحظة المسح الحالة المحلية في المتصفح ده «تاعة» الشركة
@@ -28045,8 +28099,22 @@ const pwEye = document.getElementById("btnShowPass");
       // 🔄 ترقية 29: لو الشركة اتفضّت من عند المالك، نمسح كاش الجهاز قبل السحب (منع إعادة رفع قديم)
       try { applyResetEpoch(acc); } catch (e) { }
       stage("جاري التحميل: سحب بيانات السحابة...");
-      return window.CLOUD.loadAll().then(() => {
-        const changed = adoptCloud();
+      return window.CLOUD.loadAll()
+        .then(() => {
+          // 💊 اسحب دفعات/وصفات الصيدلية قبل ما الشاشة تبقى قابلة للبيع، عشان بوابة
+          // الوصفة تشوف نفس بيانات كل الأجهزة (مش نسخة localStorage قديمة).
+          if (window.CLOUD.pharmaPull) {
+            return window.CLOUD.pharmaPull().then(function (ph) {
+              try { pharmaEmit("pharmaHydrate", ph); } catch (e) { }
+            }).catch(function (e) {
+              console.warn("pharma hydrate skipped", e);
+              try { pharmaEmit("pharmaHydrate", null); } catch (e2) { }
+            });
+          }
+          try { pharmaEmit("pharmaHydrate", null); } catch (e) { }
+        })
+        .then(() => {
+          const changed = adoptCloud();
         A.adopting = false;
         if (productsDirty.size || productsRemoved.size) productsQueuePush();
         if (accountsDirty.size || accountsRemoved.size) accountsQueuePush();
